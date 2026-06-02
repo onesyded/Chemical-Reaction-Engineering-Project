@@ -69,3 +69,61 @@ export function buildProfile(
   }
   return profile;
 }
+
+/**
+ * Exit conversion from a PFR segment of volume V, given inlet conversion X_in.
+ *
+ * Solves: ∫_{X_in}^{X_out} dX / (-r_A) = V / F_A0
+ *
+ * First-order analytical: X_out = 1 - (1 - X_in) · exp(-k·C_A0·V / F_A0)
+ */
+export function pfrExitConversion(
+  F_A0: number, C_A0: number, k: number, order: number, X_in: number, V: number
+): number {
+  if (V <= 0) return X_in;
+  const eps = 1e-9;
+  const hi = 1 - eps;
+
+  if (order === 1) {
+    return 1 - (1 - X_in) * Math.exp(-(k * C_A0 * V) / F_A0);
+  }
+
+  const target = V / F_A0;
+  const f = (X: number) => levenspielIntegrand(F_A0, k, C_A0, X, order);
+  const g = (X_out: number) => integrate(f, X_in, X_out) - target;
+
+  if (X_in >= hi) return hi;
+  if (g(hi) <= 0) return hi;
+  if (g(X_in + eps) >= 0) return X_in;
+
+  return bisect(g, X_in + eps, hi);
+}
+
+/**
+ * Exit conversion from a CSTR of volume V, given inlet conversion X_in.
+ *
+ * Solves: V · (-r_A(X_out)) = F_A0 · (X_out - X_in)
+ * i.e.: g(X_out) = F_A0·(X_out - X_in) - V·k·C_A0^n·(1-X_out)^n = 0
+ *
+ * First-order analytical: X_out = 1 - (1 - X_in) / (1 + k·τ)  where τ = C_A0·V/F_A0
+ */
+export function cstrExitConversion(
+  F_A0: number, C_A0: number, k: number, order: number, X_in: number, V: number
+): number {
+  if (V <= 0) return X_in;
+  const eps = 1e-9;
+
+  if (order === 1) {
+    const tau = (C_A0 * V) / F_A0;
+    return 1 - (1 - X_in) / (1 + k * tau);
+  }
+
+  const g = (X: number) =>
+    F_A0 * (X - X_in) - V * k * Math.pow(C_A0, order) * Math.pow(1 - X, order);
+
+  const hi = 1 - eps;
+  if (g(hi) <= 0) return hi;
+  if (g(X_in + eps) >= 0) return X_in;
+
+  return bisect(g, X_in + eps, hi);
+}

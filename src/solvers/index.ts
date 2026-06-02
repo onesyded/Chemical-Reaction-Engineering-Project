@@ -1,36 +1,45 @@
-// PFR & CSTR (flow reactors)
+// ── Single flow reactors ──────────────────────────────────────────────────────
 export { sizeCSTR, conversionInCSTR } from './cstr';
 export { sizePFR, conversionInPFR } from './pfr';
 
-// Batch Reactor
+// ── Batch Reactor ─────────────────────────────────────────────────────────────
 export { sizeBatch, conversionInBatch } from './batch';
 
-// Packed Bed Reactor (PBR)
+// ── Packed Bed Reactor (PBR) ──────────────────────────────────────────────────
 export { sizePBR, conversionInPBR } from './pbr';
 
-// CSTRs in Series
+// ── Equal-volume series networks ──────────────────────────────────────────────
 export { sizeCSTRSeries, conversionInCSTRSeries } from './cstr_series';
+export { sizePFRSeries, conversionInPFRSeries } from './pfr_series';
 
-// Types
+// ── Unequal-volume CSTR series ────────────────────────────────────────────────
+export { sizeCSTRUnequal, conversionInCSTRUnequal } from './cstr_unequal';
+
+// ── Mixed CSTR + PFR network ──────────────────────────────────────────────────
+export { sizeMixedReactors, conversionInMixedReactors } from './mixed';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 export type {
-  SolverInput,
-  SizingInput,
-  ConversionInput,
-  SizingResult,
-  ConversionResult,
-  ProfilePoint,
-  BatchSizingInput,
-  BatchConversionInput,
-  BatchSizingResult,
-  BatchConversionResult,
-  BatchProfilePoint,
-  PBRSizingInput,
-  PBRConversionInput,
-  PBRSizingResult,
-  PBRConversionResult,
-  PBRProfilePoint,
-  CSTRSeriesSizingInput,
-  CSTRSeriesConversionInput,
-  CSTRSeriesSizingResult,
-  CSTRSeriesConversionResult,
+  // PFR / CSTR
+  SolverInput, SizingInput, ConversionInput,
+  SizingResult, ConversionResult, ProfilePoint,
+  // Batch
+  BatchSizingInput, BatchConversionInput,
+  BatchSizingResult, BatchConversionResult, BatchProfilePoint,
+  // PBR
+  PBRSizingInput, PBRConversionInput,
+  PBRSizingResult, PBRConversionResult, PBRProfilePoint,
+  // Equal-volume CSTR series
+  CSTRSeriesSizingInput, CSTRSeriesConversionInput,
+  CSTRSeriesSizingResult, CSTRSeriesConversionResult,
+  // PFR series
+  PFRSeriesSizingInput, PFRSeriesConversionInput,
+  PFRSeriesSizingResult, PFRSeriesConversionResult,
+  // Unequal CSTR series
+  CSTRUnequalSizingInput, CSTRUnequalConversionInput,
+  CSTRUnequalSizingResult, CSTRUnequalConversionResult,
+  // Mixed network
+  MixedSizingInput, MixedConversionInput,
+  MixedSizingResult, MixedConversionResult,
+  ReactorUnit, ReactorUnitType,
 } from './types';
