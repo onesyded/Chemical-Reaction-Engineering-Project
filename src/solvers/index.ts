@@ -21,6 +21,9 @@ export { sizeMixedReactors, conversionInMixedReactors } from './mixed';
 // ── General network (series + parallel) ──────────────────────────────────────
 export { sizeNetwork, conversionInNetwork } from './network';
 
+// ── Reactor Explorer (auto-enumerate + rank all configurations) ───────────────
+export { exploreForTarget, exploreForConversion } from './explorer';
+
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type {
   // PFR / CSTR
@@ -49,4 +52,7 @@ export type {
   NetworkStage, NetworkReactor, NetworkParallelBlock,
   NetworkStageResult, NetworkReactorResult, NetworkParallelResult,
   NetworkSizingInput, NetworkConversionInput, NetworkResult,
+  // Explorer
+  ExplorerInput, ExplorerSizingResult, ConfigSizingResult,
+  ExplorerConversionInput, ExplorerConversionResult, ConfigConversionResult,
 } from './types';

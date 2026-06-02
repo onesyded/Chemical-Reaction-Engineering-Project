@@ -377,3 +377,68 @@ export interface NetworkResult {
   V_total?: number;                  // total network volume (sizing only)
   stage_results: NetworkStageResult[];
 }
+
+// ── Reactor Explorer ──────────────────────────────────────────────────────────
+//
+// Given a reaction description, the explorer automatically tries every
+// meaningful reactor configuration — single, series, parallel, and mixed —
+// and ranks the results.
+//
+// Forward problem: given X_target → find V_total for each configuration.
+//   Ranked ascending by V_total (smallest = most efficient).
+//
+// Inverse problem: given V_total → find X achieved by each configuration.
+//   Ranked descending by X (highest = most efficient).
+//
+// efficiency (sizing):   V_pfr / V_total  (1.0 = as good as PFR, <1.0 = worse)
+// efficiency (conversion): X / X_pfr      (1.0 = matches PFR performance)
+
+export interface ExplorerInput {
+  F_A0: number;
+  C_A0: number;
+  k: number;
+  X_target: number;  // target conversion (0 < X < 1)
+  order?: number;
+}
+
+export interface ConfigSizingResult {
+  label: string;              // human-readable description
+  id: string;                 // machine-readable key
+  V_total: number;            // total volume required (m³)
+  efficiency: number;         // V_pfr / V_total
+  stage_conversions: number[];
+}
+
+export interface ExplorerSizingResult {
+  ok: boolean;
+  error?: string;
+  X_target: number;
+  V_pfr: number;              // single PFR baseline
+  V_cstr: number;             // single CSTR baseline
+  ranked: ConfigSizingResult[];  // sorted V_total ascending (best first)
+}
+
+export interface ExplorerConversionInput {
+  F_A0: number;
+  C_A0: number;
+  k: number;
+  V_total: number;            // total volume available (m³)
+  order?: number;
+}
+
+export interface ConfigConversionResult {
+  label: string;
+  id: string;
+  X: number;                  // conversion achieved
+  efficiency: number;         // X / X_pfr
+  stage_conversions: number[];
+}
+
+export interface ExplorerConversionResult {
+  ok: boolean;
+  error?: string;
+  V_total: number;
+  X_pfr: number;              // single PFR baseline
+  X_cstr: number;             // single CSTR baseline
+  ranked: ConfigConversionResult[];  // sorted X descending (best first)
+}

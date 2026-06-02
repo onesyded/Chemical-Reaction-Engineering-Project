@@ -100,6 +100,25 @@ export function pfrExitConversion(
 }
 
 /**
+ * Golden-section search — finds the x in [a, b] that minimises f(x).
+ * Use negated f to maximise.
+ */
+export function goldenSearch(
+  f: (x: number) => number, a: number, b: number, tol = 1e-8, maxIter = 200
+): number {
+  const phi = (Math.sqrt(5) - 1) / 2;
+  let lo = a, hi = b;
+  let c = hi - phi * (hi - lo);
+  let d = lo + phi * (hi - lo);
+  for (let i = 0; i < maxIter && Math.abs(hi - lo) > tol; i++) {
+    if (f(c) < f(d)) { hi = d; } else { lo = c; }
+    c = hi - phi * (hi - lo);
+    d = lo + phi * (hi - lo);
+  }
+  return (lo + hi) / 2;
+}
+
+/**
  * Exit conversion from a CSTR of volume V, given inlet conversion X_in.
  *
  * Solves: V · (-r_A(X_out)) = F_A0 · (X_out - X_in)
