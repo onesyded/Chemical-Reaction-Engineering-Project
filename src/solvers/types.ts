@@ -295,3 +295,85 @@ export interface MixedConversionResult extends MixedResult {
   stage_conversions: number[];
   stage_profiles: Array<ProfilePoint[] | null>;
 }
+
+// ── General Reactor Network (Series + Parallel) ───────────────────────────────
+//
+// A network is a sequence of "stages". Each stage is either:
+//   • A single reactor (CSTR or PFR) — flow passes straight through.
+//   • A parallel block — flow is split among independent trains, each train
+//     being its own series of single reactors, then recombined.
+//
+// Series connection between stages is implicit (outlet of stage i → inlet of stage i+1).
+//
+// Design equations:
+//   PFR unit:  V_i = F_A0,train · ∫_{X_in}^{X_out} dX / (-r_A)
+//   CSTR unit: V_i · (-r_A(X_out)) = F_A0,train · (X_out - X_in)
+//
+// Mixing rule after a parallel block (flow-weighted average):
+//   X_mix = Σ_i α_i · X_i     where α_i = F_A0,i / F_A0
+//
+// For sizing: each unit carries a volume_fraction (relative to network V_total,
+// auto-normalised). Bisection finds V_total that achieves X_target.
+// For conversion: each unit carries an explicit volume (m³).
+
+export interface NetworkReactor {
+  kind: 'CSTR' | 'PFR';
+  volume_fraction?: number;   // for sizing (relative to network V_total, auto-normalised)
+  volume?: number;            // for conversion calculation (m³)
+}
+
+export interface NetworkParallelBlock {
+  kind: 'parallel';
+  // Each train is an ordered series of single reactors.
+  trains: NetworkReactor[][];
+  // How F_A0 is split among trains (auto-normalised, default: equal split).
+  flow_fractions?: number[];
+}
+
+export type NetworkStage = NetworkReactor | NetworkParallelBlock;
+
+// ── Network result types ──────────────────────────────────────────────────────
+
+export interface NetworkReactorResult {
+  kind: 'CSTR' | 'PFR';
+  X_in: number;
+  X_out: number;
+  volume: number;
+  profile: ProfilePoint[] | null;   // spatial profile for PFR, null for CSTR
+}
+
+export interface NetworkParallelResult {
+  kind: 'parallel';
+  X_in: number;
+  X_out: number;                     // flow-weighted mixed outlet conversion
+  flow_fractions: number[];          // normalised flow fractions used
+  train_results: NetworkReactorResult[][];
+}
+
+export type NetworkStageResult = NetworkReactorResult | NetworkParallelResult;
+
+export interface NetworkSizingInput {
+  F_A0: number;
+  C_A0: number;
+  k: number;
+  X_target: number;
+  stages: NetworkStage[];
+  order?: number;
+}
+
+export interface NetworkConversionInput {
+  F_A0: number;
+  C_A0: number;
+  k: number;
+  stages: NetworkStage[];
+  order?: number;
+}
+
+export interface NetworkResult {
+  ok: boolean;
+  validConversion: boolean;
+  error?: string;
+  X: number;
+  V_total?: number;                  // total network volume (sizing only)
+  stage_results: NetworkStageResult[];
+}

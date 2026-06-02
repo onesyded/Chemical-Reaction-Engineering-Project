@@ -15,8 +15,11 @@ export { sizePFRSeries, conversionInPFRSeries } from './pfr_series';
 // ── Unequal-volume CSTR series ────────────────────────────────────────────────
 export { sizeCSTRUnequal, conversionInCSTRUnequal } from './cstr_unequal';
 
-// ── Mixed CSTR + PFR network ──────────────────────────────────────────────────
+// ── Mixed CSTR + PFR network (series only) ───────────────────────────────────
 export { sizeMixedReactors, conversionInMixedReactors } from './mixed';
+
+// ── General network (series + parallel) ──────────────────────────────────────
+export { sizeNetwork, conversionInNetwork } from './network';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 export type {
@@ -38,8 +41,12 @@ export type {
   // Unequal CSTR series
   CSTRUnequalSizingInput, CSTRUnequalConversionInput,
   CSTRUnequalSizingResult, CSTRUnequalConversionResult,
-  // Mixed network
+  // Mixed series network
   MixedSizingInput, MixedConversionInput,
   MixedSizingResult, MixedConversionResult,
   ReactorUnit, ReactorUnitType,
+  // General network (series + parallel)
+  NetworkStage, NetworkReactor, NetworkParallelBlock,
+  NetworkStageResult, NetworkReactorResult, NetworkParallelResult,
+  NetworkSizingInput, NetworkConversionInput, NetworkResult,
 } from './types';
