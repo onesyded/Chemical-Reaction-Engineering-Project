@@ -1,0 +1,21 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --color-teal-primary: #0E7C66;
+  --color-coral-accent: #E2603A;
+}
+
+@keyframes pfr-flow {
+  0% { transform: translateX(0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 1; }
+  100% { transform: translateX(400px); opacity: 0; }
+}
+
+@keyframes cstr-stir {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
