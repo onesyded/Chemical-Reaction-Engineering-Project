@@ -1,14 +1,15 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Settings, Send, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Send, ShieldCheck, AlertTriangle, RotateCcw, Activity } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
+import katex from 'katex';
 import { ChatMessage, ReactorState, ChatResponse } from './types';
 import {
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
@@ -23,231 +24,429 @@ export function cn(...inputs: (string | undefined | null | false)[]) {
   return twMerge(clsx(inputs));
 }
 
+// Palette (control-room dark)
+const EM = '#34D399';
+const CORAL = '#FB7185';
+
 // -------------------------------------------------------------
-// Reactor Visualization Components
+// Formatting
 // -------------------------------------------------------------
 
-function ReactorSchematic({ state }: { state: ReactorState }) {
-  if (!state || !state.type) {
-    return (
-      <div className="flex items-center justify-center h-48 bg-gray-50 border border-gray-100 rounded-xl text-gray-400 text-sm">
-        Start a conversation to see the reactor schematic.
-      </div>
-    );
-  }
-
-  const { type, volume, conversion } = state;
-
-  return (
-    <div className="relative w-full h-48 bg-white border border-gray-100 rounded-xl flex items-center justify-center p-4 overflow-hidden">
-      {type === 'PFR' && (
-        <div className="w-full max-w-md h-32 flex items-center justify-center">
-          <svg viewBox="0 0 400 100" width="100%" height="100%" className="overflow-visible">
-            <defs>
-              <clipPath id="pfr-clip">
-                <rect x="0" y="20" width="400" height="60" rx="30" />
-              </clipPath>
-            </defs>
-            <rect x="0" y="20" width="400" height="60" rx="30" fill="none" stroke="#e5e7eb" strokeWidth="4" />
-            <g clipPath="url(#pfr-clip)">
-              <rect x="0" width="67" y="0" height="100" fill="#9FE1CB" />
-              <rect x="66" width="67" y="0" height="100" fill="#7EC8B0" />
-              <rect x="133" width="67" y="0" height="100" fill="#5DB095" />
-              <rect x="200" width="67" y="0" height="100" fill="#3A967A" />
-              <rect x="266" width="67" y="0" height="100" fill="#1D9E75" />
-              <rect x="333" width="68" y="0" height="100" fill="#04342C" />
-
-              <circle cx="0" cy="50" r="5" fill="#E2603A">
-                <animate attributeName="cx" from="0" to="400" dur="2s" repeatCount="indefinite" />
-              </circle>
-              <circle cx="0" cy="50" r="5" fill="#E2603A">
-                <animate attributeName="cx" from="0" to="400" dur="2s" begin="0.5s" repeatCount="indefinite" />
-              </circle>
-              <circle cx="0" cy="50" r="5" fill="#E2603A">
-                <animate attributeName="cx" from="0" to="400" dur="2s" begin="1s" repeatCount="indefinite" />
-              </circle>
-              <circle cx="0" cy="50" r="5" fill="#E2603A">
-                <animate attributeName="cx" from="0" to="400" dur="2s" begin="1.5s" repeatCount="indefinite" />
-              </circle>
-            </g>
-          </svg>
-        </div>
-      )}
-
-      {type === 'CSTR' && (
-        <div className="w-32 h-32 flex items-center justify-center">
-          <svg viewBox="0 0 100 100" width="100%" height="100%" className="overflow-visible">
-            <rect x="10" y="10" width="80" height="80" rx="20" fill="#1D9E75" stroke="#04342C" strokeWidth="3" />
-            <rect x="47" y="10" width="6" height="55" fill="#5C6B66" />
-            <g transform="translate(50, 70)">
-              <rect x="-25" y="-4" width="50" height="8" rx="4" fill="#e5e7eb">
-                <animateTransform 
-                  attributeName="transform" 
-                  type="rotate" 
-                  from="0 0 0" 
-                  to="360 0 0" 
-                  dur="1s" 
-                  repeatCount="indefinite" 
-                />
-              </rect>
-            </g>
-          </svg>
-        </div>
-      )}
-
-      {/* Conversion Callout */}
-      <div className="absolute top-4 right-4 bg-[#E0F4EE] px-3 py-2 rounded-lg border border-[#A6DCD0] flex flex-col items-center">
-        <span className="text-[10px] font-semibold text-[#0E7C66] uppercase tracking-wider mb-0.5">
-          Conversion
-        </span>
-        <span className="text-xl font-bold text-[#16302D] leading-none">
-          {conversion !== undefined ? conversion.toFixed(3) : '-'}
-        </span>
-      </div>
-
-      {/* Volume Label */}
-      <div className="absolute bottom-4 pb-1 text-sm font-medium text-[#5C6B66] bg-white/80 px-2 rounded backdrop-blur">
-        {type} &middot; {volume !== undefined ? volume.toFixed(3) : '-'} m³
-      </div>
-    </div>
-  );
+function fmt(n?: number): string {
+  if (n == null || !isFinite(n)) return '—';
+  const a = Math.abs(n);
+  if (a !== 0 && (a < 1e-3 || a >= 1e5)) return n.toExponential(2);
+  return Number(n.toPrecision(4)).toString();
 }
 
-function ReactorPlot({ state }: { state: ReactorState }) {
-  if (!state || !state.type) {
-    return (
-       <div className="flex flex-col items-center justify-center h-64 bg-gray-50 border border-gray-100 rounded-xl text-gray-400 text-sm mt-4">
-        Plot will appear here.
-      </div>
-    );
-  }
-
-  const { type, volume, conversion, profile } = state;
-  let data = profile || [];
-
-  // For CSTR, we might just have a single point or no profile, but we need some width on X axis.
-  if (type === 'CSTR' && profile == null && volume != null && conversion != null) {
-      data = [
-        { volume: 0, conversion: null },
-        { volume: volume * 1.5, conversion: null } // Establish axis range, no line
-      ];
-  }
-
-  const operatingPoint = { volume, conversion };
-
-  return (
-    <div className="w-full h-64 mt-4 bg-white border border-gray-100 rounded-xl p-4 flex flex-col">
-      <h3 className="text-xs font-semibold text-[#5C6B66] uppercase tracking-wider mb-4">
-        Conversion vs Volume
-      </h3>
-      <div className="flex-1">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 5, right: 20, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-            <XAxis
-              dataKey="volume"
-              type="number"
-              domain={[0, 'dataMax']}
-              tick={{ fontSize: 12, fill: '#5C6B66' }}
-              tickFormatter={(v) => v.toFixed(1)}
-              tickLine={false}
-              axisLine={false}
-            />
-            <YAxis
-              dataKey="conversion"
-              type="number"
-              domain={[0, 1]}
-              tick={{ fontSize: 12, fill: '#5C6B66' }}
-              tickLine={false}
-              axisLine={false}
-            />
-            <Tooltip
-              contentStyle={{ borderRadius: '8px', border: '1px solid #E5E7EB', boxShadow: 'none' }}
-              labelFormatter={(v) => `Volume: ${Number(v).toFixed(2)} m³`}
-              formatter={(v: number) => [v.toFixed(3), 'Conversion']}
-            />
-            <Line
-              type="monotone"
-              dataKey="conversion"
-              stroke="#0E7C66"
-              strokeWidth={3}
-              dot={false}
-              activeDot={{ r: 6, fill: '#0E7C66', stroke: '#fff', strokeWidth: 2 }}
-            />
-            {type === 'CSTR' && volume != null && conversion != null && (
-               <ReferenceDot
-                 x={volume}
-                 y={conversion}
-                 r={6}
-                 fill="#E2603A"
-                 stroke="#fff"
-                 strokeWidth={2}
-               />
-            )}
-            {type === 'PFR' && volume != null && conversion != null && (
-               <ReferenceDot
-                 x={volume}
-                 y={conversion}
-                 r={6}
-                 fill="#E2603A"
-                 stroke="#fff"
-                 strokeWidth={2}
-               />
-            )}
-          </LineChart>
-        </ResponsiveContainer>
-      </div>
-    </div>
-  );
+// Residence (space) time τ = V / v0, with volumetric feed v0 = F_A0 / C_A0.
+function residenceTime(s: ReactorState): number | undefined {
+  if (s.volume == null || s.C_A0 == null || !s.F_A0) return undefined;
+  return (s.volume * s.C_A0) / s.F_A0;
 }
 
-function VerifiedBadge({ state }: { state: ReactorState }) {
-  if (!state || !state.checks || !state.type) return null;
+// The design equation actually applied, in general (any-order) Levenspiel form.
+function designEquation(s: ReactorState): string {
+  const rate = '\\;\\; -r_A = k\\,C_{A0}^{\\,n}(1-X)^n';
+  return s.type === 'CSTR'
+    ? `V = \\dfrac{F_{A0}\\,X}{-r_A}${rate}`
+    : `V = F_{A0}\\!\\int_0^{X}\\!\\dfrac{dX}{-r_A}${rate}`;
+}
 
-  const { ok, checks } = state;
-  const isOk = ok && checks.positiveVolume && checks.validConversion;
+function MathInline({ tex }: { tex: string }) {
+  const html = katex.renderToString(tex, { throwOnError: false, displayMode: false });
+  return <span dangerouslySetInnerHTML={{ __html: html }} />;
+}
 
+// -------------------------------------------------------------
+// Telemetry readout cell
+// -------------------------------------------------------------
+
+function Readout({
+  label,
+  value,
+  unit,
+  accent = false,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  accent?: boolean;
+}) {
   return (
-    <div
-      className={cn(
-        "mt-4 flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium",
-        isOk ? "bg-[#F0FAF7] text-[#0E7C66]" : "bg-amber-50 text-amber-800"
-      )}
-    >
-      {isOk ? (
-        <CheckCircle2 className="w-5 h-5 text-[#0E7C66]" />
-      ) : (
-        <AlertCircle className="w-5 h-5 text-amber-600" />
-      )}
-      <span>
-        {isOk
-          ? "verified · 0 ≤ X ≤ 1 · volume positive"
-          : "warning · physically invalid parameters"}
+    <div className="flex flex-col gap-1 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
+      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#7E938B]">
+        {label}
+      </span>
+      <span
+        className={cn(
+          'font-mono text-lg leading-none tabular-nums',
+          accent ? 'text-[#34D399] glow-text' : 'text-[#E6EFEB]'
+        )}
+      >
+        {value}
+        {unit && <span className="ml-1 text-[11px] text-[#7E938B]">{unit}</span>}
       </span>
     </div>
   );
 }
 
 // -------------------------------------------------------------
-// Layout & Main App
+// Verified pill
 // -------------------------------------------------------------
 
-export default function App() {
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [reactorState, setReactorState] = useState<ReactorState | null>(null);
-  const [input, setInput] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
-  const [sessionId] = useState(() => Math.random().toString(36).substring(7));
+function VerifiedPill({ state }: { state: ReactorState }) {
+  const isOk = !!state.ok;
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-1.5 rounded-full border px-3 py-1 font-mono text-[11px] tracking-wide',
+        isOk
+          ? 'border-[#34D399]/30 bg-[#34D399]/10 text-[#6EE7B7]'
+          : 'border-[#FBBF24]/30 bg-[#FBBF24]/10 text-[#FCD34D]'
+      )}
+    >
+      {isOk ? (
+        <>
+          <ShieldCheck className="h-3.5 w-3.5" />
+          VERIFIED · 0 ≤ X ≤ 1 · V &gt; 0
+        </>
+      ) : (
+        <>
+          <AlertTriangle className="h-3.5 w-3.5" />
+          CHECK FAILED
+        </>
+      )}
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// Reactor schematics
+// -------------------------------------------------------------
+
+const glowFilter = (
+  <filter id="reactor-glow" x="-50%" y="-50%" width="200%" height="200%">
+    <feGaussianBlur stdDeviation="3.5" result="b" />
+    <feMerge>
+      <feMergeNode in="b" />
+      <feMergeNode in="SourceGraphic" />
+    </feMerge>
+  </filter>
+);
+
+function PFRSchematic({ conversion = 0 }: { conversion?: number }) {
+  // Bright end of the gradient tracks how far conversion has progressed.
+  const brightStop = `${Math.max(8, Math.min(100, conversion * 100)).toFixed(0)}%`;
+  return (
+    <svg viewBox="0 0 420 150" width="100%" height="100%" className="overflow-visible">
+      <defs>
+        {glowFilter}
+        <linearGradient id="pfr-fill" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0%" stopColor="#0E3B30" />
+          <stop offset={brightStop} stopColor="#34D399" />
+          <stop offset="100%" stopColor="#A7F3D0" />
+        </linearGradient>
+        <clipPath id="pfr-clip">
+          <rect x="34" y="52" width="352" height="46" rx="23" />
+        </clipPath>
+      </defs>
+
+      {/* inlet / outlet stubs */}
+      <rect x="12" y="68" width="26" height="14" rx="3" fill="#16201D" stroke="#2C3A35" strokeWidth="1.5" />
+      <rect x="382" y="68" width="26" height="14" rx="3" fill="#16201D" stroke="#2C3A35" strokeWidth="1.5" />
+
+      {/* tube body */}
+      <g clipPath="url(#pfr-clip)">
+        <rect x="34" y="52" width="352" height="46" fill="url(#pfr-fill)" />
+        {/* flowing reactant particles */}
+        {[0, 0.5, 1, 1.5].map((delay, i) => (
+          <circle key={i} cx="34" cy="75" r="3.4" fill={CORAL} opacity="0.9">
+            <animate attributeName="cx" from="34" to="386" dur="2.4s" begin={`${delay}s`} repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0;0.95;0.95;0" dur="2.4s" begin={`${delay}s`} repeatCount="indefinite" />
+          </circle>
+        ))}
+      </g>
+      <rect
+        x="34" y="52" width="352" height="46" rx="23"
+        fill="none" stroke={EM} strokeWidth="1.6" opacity="0.65"
+        filter="url(#reactor-glow)"
+      />
+
+      {/* labels */}
+      <text x="14" y="104" className="font-mono" fontSize="10" fill="#7E938B">A in</text>
+      <text x="372" y="104" className="font-mono" fontSize="10" fill="#7E938B">B out</text>
+      <text x="210" y="34" textAnchor="middle" className="font-mono" fontSize="11" fill="#6EE7B7" letterSpacing="2">
+        PLUG FLOW
+      </text>
+    </svg>
+  );
+}
+
+function CSTRSchematic({ conversion = 0 }: { conversion?: number }) {
+  const fillOpacity = (0.18 + conversion * 0.6).toFixed(2);
+  return (
+    <svg viewBox="0 0 300 150" width="100%" height="100%" className="overflow-visible">
+      <defs>
+        {glowFilter}
+        <linearGradient id="cstr-fill" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#34D399" />
+          <stop offset="100%" stopColor="#0E3B30" />
+        </linearGradient>
+      </defs>
+
+      {/* inlet pipe (top-left) */}
+      <path d="M40 18 H96 V40" fill="none" stroke="#2C3A35" strokeWidth="3" />
+      <circle cx="40" cy="18" r="3" fill={CORAL} opacity="0.9">
+        <animate attributeName="opacity" values="0.3;1;0.3" dur="1.6s" repeatCount="indefinite" />
+      </circle>
+      {/* outlet pipe (bottom-right) */}
+      <path d="M204 120 H260 V134" fill="none" stroke="#2C3A35" strokeWidth="3" />
+
+      {/* vessel */}
+      <rect x="96" y="34" width="108" height="92" rx="16" fill="url(#cstr-fill)" fillOpacity={fillOpacity} />
+      <rect
+        x="96" y="34" width="108" height="92" rx="16"
+        fill="none" stroke={EM} strokeWidth="1.8" opacity="0.7" filter="url(#reactor-glow)"
+      />
+      {/* liquid surface line */}
+      <line x1="100" y1="50" x2="200" y2="50" stroke={EM} strokeWidth="1" opacity="0.35" />
+
+      {/* stirrer shaft + impeller */}
+      <rect x="148" y="22" width="4" height="66" rx="2" fill="#5C6B66" />
+      <g transform="translate(150, 92)">
+        <g>
+          <rect x="-26" y="-3" width="52" height="6" rx="3" fill="#9FB0AA" />
+          <rect x="-3" y="-26" width="6" height="52" rx="3" fill="#9FB0AA" opacity="0.5" />
+          <animateTransform attributeName="transform" type="rotate" from="0 0 0" to="360 0 0" dur="1.4s" repeatCount="indefinite" />
+        </g>
+      </g>
+
+      {/* rising bubbles for the well-mixed feel */}
+      {[120, 150, 178].map((x, i) => (
+        <circle key={i} cx={x} cy="116" r="2.2" fill="#A7F3D0" opacity="0.6">
+          <animate attributeName="cy" values="116;58" dur={`${2 + i * 0.4}s`} repeatCount="indefinite" />
+          <animate attributeName="opacity" values="0;0.7;0" dur={`${2 + i * 0.4}s`} repeatCount="indefinite" />
+        </circle>
+      ))}
+
+      <text x="150" y="146" textAnchor="middle" className="font-mono" fontSize="11" fill="#6EE7B7" letterSpacing="2">
+        WELL MIXED
+      </text>
+    </svg>
+  );
+}
+
+// -------------------------------------------------------------
+// Reactor stage (schematic + glow + empty state)
+// -------------------------------------------------------------
+
+function ReactorStage({ state }: { state: ReactorState | null }) {
+  if (!state || !state.type) {
+    return (
+      <div className="relative flex h-[230px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.015]">
+        <div className="max-w-xs text-center">
+          <Activity className="mx-auto mb-3 h-6 w-6 text-[#34D399]/50" />
+          <p className="text-sm text-[#7E938B]">
+            Describe a reactor problem in the conversation panel. The reactor, its numbers, and the
+            conversion curve will materialise here.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative flex h-[230px] items-center justify-center overflow-hidden rounded-xl border border-white/5 bg-[radial-gradient(420px_220px_at_50%_30%,rgba(52,211,153,0.10),transparent_70%)]">
+      <div className="absolute left-4 top-3 font-mono text-[11px] uppercase tracking-[0.16em] text-[#7E938B]">
+        {state.type === 'PFR' ? 'Tubular reactor' : 'Stirred tank'}
+      </div>
+      <div className={cn('px-6', state.type === 'PFR' ? 'w-full max-w-xl' : 'w-44')}>
+        {state.type === 'PFR' ? (
+          <PFRSchematic conversion={state.conversion} />
+        ) : (
+          <CSTRSchematic conversion={state.conversion} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// Conversion plot
+// -------------------------------------------------------------
+
+function ConversionPlot({ state }: { state: ReactorState }) {
+  const data = state.profile && state.profile.length > 1 ? state.profile : null;
+
+  return (
+    <div className="mt-4 flex h-60 w-full flex-col rounded-xl border border-white/5 bg-white/[0.015] p-4">
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#7E938B]">
+          Conversion vs Volume
+        </h3>
+        {state.type === 'CSTR' && (
+          <span className="font-mono text-[10px] text-[#7E938B]/70">design sweep · operating point in coral</span>
+        )}
+      </div>
+      <div className="min-h-0 flex-1">
+        {data ? (
+          <ResponsiveContainer width="100%" height="100%">
+            <AreaChart data={data} margin={{ top: 4, right: 12, left: -8, bottom: 2 }}>
+              <defs>
+                <linearGradient id="conv-fill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor={EM} stopOpacity={0.35} />
+                  <stop offset="100%" stopColor={EM} stopOpacity={0} />
+                </linearGradient>
+              </defs>
+              <CartesianGrid strokeDasharray="2 4" stroke="rgba(120,200,170,0.12)" />
+              <XAxis
+                dataKey="volume"
+                type="number"
+                domain={[0, 'dataMax']}
+                tick={{ fontSize: 11, fill: '#7E938B', fontFamily: 'DM Mono' }}
+                tickFormatter={(v) => fmt(v)}
+                tickLine={false}
+                axisLine={{ stroke: 'rgba(120,200,170,0.15)' }}
+                label={{ value: 'V (m³)', position: 'insideBottomRight', offset: -2, fill: '#7E938B', fontSize: 10 }}
+              />
+              <YAxis
+                dataKey="conversion"
+                type="number"
+                domain={[0, 1]}
+                tick={{ fontSize: 11, fill: '#7E938B', fontFamily: 'DM Mono' }}
+                tickLine={false}
+                axisLine={false}
+              />
+              <Tooltip
+                contentStyle={{
+                  background: '#0C1312',
+                  border: '1px solid rgba(52,211,153,0.25)',
+                  borderRadius: 8,
+                  fontFamily: 'DM Mono',
+                  fontSize: 12,
+                  color: '#E6EFEB',
+                }}
+                labelStyle={{ color: '#7E938B' }}
+                labelFormatter={(v) => `V = ${fmt(Number(v))} m³`}
+                formatter={(v: number) => [fmt(v), 'X']}
+              />
+              <Area
+                type="monotone"
+                dataKey="conversion"
+                stroke={EM}
+                strokeWidth={2.5}
+                fill="url(#conv-fill)"
+                dot={false}
+                activeDot={{ r: 4, fill: EM, stroke: '#0C1312', strokeWidth: 2 }}
+                isAnimationActive
+              />
+              {state.volume != null && state.conversion != null && (
+                <>
+                  <ReferenceDot x={state.volume} y={state.conversion} r={9} fill={CORAL} fillOpacity={0.2} stroke="none" />
+                  <ReferenceDot x={state.volume} y={state.conversion} r={4.5} fill={CORAL} stroke="#0C1312" strokeWidth={2} />
+                </>
+              )}
+            </AreaChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex h-full items-center justify-center text-center font-mono text-xs text-[#7E938B]/70">
+            {state.error ? 'No curve — inputs were rejected (see status above).' : 'Plot will appear here.'}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
+// Visualization panel
+// -------------------------------------------------------------
+
+function VizPanel({ state, className }: { state: ReactorState | null; className?: string }) {
+  return (
+    <section className={cn('min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0B100F]/80 backdrop-blur', className)}>
+      <div className="flex flex-none items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
+        <h2 className="font-display text-sm font-bold tracking-tight text-[#E6EFEB]">
+          Reactor{state?.type ? <span className="text-[#34D399]"> · {state.type}</span> : ''}
+        </h2>
+        {state?.type && <VerifiedPill state={state} />}
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-y-auto p-5">
+        <ReactorStage state={state} />
+
+        {state?.type && (
+          <>
+            {state.error && (
+              <div className="mt-4 flex items-start gap-2 rounded-lg border border-[#FBBF24]/25 bg-[#FBBF24]/10 px-3 py-2.5 text-sm text-[#FCD34D]">
+                <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
+                <span>{state.error}</span>
+              </div>
+            )}
+
+            <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+              <Readout label="Volume" value={fmt(state.volume)} unit="m³" accent />
+              <Readout label="Conversion" value={fmt(state.conversion)} accent />
+              <Readout label="Residence τ" value={fmt(residenceTime(state))} unit="s" />
+              <Readout label="Rate const k" value={fmt(state.k)} />
+              <Readout label="Feed F_A0" value={fmt(state.F_A0)} unit="mol/s" />
+              <Readout label="Conc C_A0" value={fmt(state.C_A0)} unit="mol/m³" />
+            </div>
+
+            <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.015] p-4">
+              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#7E938B]">
+                Model &amp; assumptions
+              </div>
+              <p className="mb-3 text-sm text-[#B7C7C1]">
+                Isothermal · {state.order === 1 ? 'first-order' : `${fmt(state.order)}-order`} in A · A → B ·
+                constant density
+              </p>
+              <div className="overflow-x-auto text-[15px] text-[#E6EFEB]">
+                <MathInline tex={designEquation(state)} />
+              </div>
+            </div>
+
+            <ConversionPlot state={state} />
+          </>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// -------------------------------------------------------------
+// Conversation panel
+// -------------------------------------------------------------
+
+const EXAMPLES = [
+  'Size a PFR to convert 90% of A → B, with k = 0.5 /s, F_A0 = 1 mol/s, C_A0 = 2000 mol/m³',
+  'What conversion does a 0.05 m³ CSTR reach for k = 0.5, F_A0 = 1, C_A0 = 2000?',
+];
+
+function ChatPanel({
+  messages,
+  isLoading,
+  input,
+  setInput,
+  onSubmit,
+  onReset,
+  className,
+}: {
+  messages: ChatMessage[];
+  isLoading: boolean;
+  input: string;
+  setInput: (v: string) => void;
+  onSubmit: (e: React.FormEvent) => void;
+  onReset: () => void;
+  className?: string;
+}) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages, isLoading]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -259,48 +458,163 @@ export default function App() {
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit(e as any);
+      onSubmit(e as any);
     }
+  };
+
+  return (
+    <section className={cn('min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0B100F]/80 backdrop-blur', className)}>
+      <div className="flex flex-none items-center justify-between border-b border-white/[0.06] px-4 py-3.5">
+        <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#7E938B]">
+          Conversation
+        </h2>
+        <button
+          onClick={onReset}
+          className="flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[#7E938B] transition-colors hover:bg-white/5 hover:text-[#E6EFEB]"
+          title="Start a new session"
+        >
+          <RotateCcw className="h-3 w-3" />
+          New
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
+        {messages.length === 0 && (
+          <div className="mt-6 space-y-4">
+            <p className="text-center text-sm text-[#7E938B]">
+              Ask me to size a PFR or CSTR, or to find the conversion in a reactor you describe.
+            </p>
+            <div className="space-y-2">
+              {EXAMPLES.map((ex) => (
+                <button
+                  key={ex}
+                  onClick={() => setInput(ex)}
+                  className="block w-full rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-left text-[13px] leading-snug text-[#B7C7C1] transition-colors hover:border-[#34D399]/30 hover:bg-[#34D399]/[0.06]"
+                >
+                  {ex}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {messages.map((msg) => (
+          <div key={msg.id} className={cn('flex animate-rise', msg.role === 'user' ? 'justify-end' : 'justify-start')}>
+            <div
+              className={cn(
+                'max-w-[88%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed',
+                msg.role === 'user'
+                  ? 'rounded-br-md border border-[#34D399]/20 bg-[#34D399]/[0.10] text-[#E6EFEB]'
+                  : 'rounded-bl-md border border-white/[0.06] bg-white/[0.03] text-[#D6E2DD]'
+              )}
+            >
+              {msg.role === 'model' ? (
+                <div className="prose prose-sm prose-invert max-w-none prose-p:leading-relaxed prose-headings:text-[#E6EFEB] prose-strong:text-[#A7F3D0] prose-a:text-[#34D399] prose-code:text-[#A7F3D0]">
+                  <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>
+                    {msg.content}
+                  </ReactMarkdown>
+                </div>
+              ) : (
+                <span className="whitespace-pre-wrap">{msg.content}</span>
+              )}
+            </div>
+          </div>
+        ))}
+
+        {isLoading && (
+          <div className="flex justify-start">
+            <div className="flex h-10 items-center space-x-1 rounded-2xl rounded-bl-md border border-white/[0.06] bg-white/[0.03] px-4 py-3">
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#34D399]/70 [animation-delay:-0.3s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#34D399]/70 [animation-delay:-0.15s]" />
+              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#34D399]/70" />
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <form onSubmit={onSubmit} className="flex-none border-t border-white/[0.06] p-3">
+        <div className="relative flex items-end">
+          <textarea
+            ref={textareaRef}
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder="Describe your reactor problem…"
+            className="max-h-[200px] min-h-[46px] w-full resize-none rounded-xl border border-white/[0.07] bg-white/[0.03] py-3 pl-4 pr-12 text-[14px] text-[#E6EFEB] placeholder-[#7E938B]/70 transition-all focus:border-[#34D399]/40 focus:outline-none focus:ring-2 focus:ring-[#34D399]/15"
+            disabled={isLoading}
+            rows={1}
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isLoading}
+            className="absolute bottom-1.5 right-1.5 rounded-lg bg-[#10B981] p-2 text-[#04221A] transition-colors hover:bg-[#34D399] disabled:opacity-40 disabled:hover:bg-[#10B981]"
+          >
+            <Send className="h-4 w-4" />
+          </button>
+        </div>
+      </form>
+    </section>
+  );
+}
+
+// -------------------------------------------------------------
+// App
+// -------------------------------------------------------------
+
+export default function App() {
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [reactorState, setReactorState] = useState<ReactorState | null>(null);
+  const [input, setInput] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [sessionId, setSessionId] = useState(() => Math.random().toString(36).substring(2, 10));
+  // On phones we show one panel at a time via a tab switch (both show side-by-side on lg+).
+  const [mobileTab, setMobileTab] = useState<'reactor' | 'chat'>('chat');
+
+  const handleReset = () => {
+    setMessages([]);
+    setReactorState(null);
+    setInput('');
+    setSessionId(Math.random().toString(36).substring(2, 10));
+    setMobileTab('chat');
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim() || isLoading) return;
 
-    const userMsg: ChatMessage = { id: Math.random().toString(), role: "user", content: input };
+    const userMsg: ChatMessage = { id: Math.random().toString(), role: 'user', content: input };
     setMessages((prev) => [...prev, userMsg]);
-    setInput("");
+    setInput('');
     setIsLoading(true);
 
     try {
-      const response = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, message: userMsg.content }),
       });
 
-      if (!response.ok) throw new Error("API error");
+      if (!response.ok) throw new Error('API error');
 
       const data: ChatResponse = await response.json();
-      
-      // Map API history to local chat messages
-      // Backend returns client-friendly history
+
       const newMessages = data.history.map((m) => ({
         id: m.id || Math.random().toString(),
-        role: m.role as 'user'|'model',
+        role: m.role as 'user' | 'model',
         content: m.content,
       }));
-      
+
       setMessages(newMessages);
-      
       if (data.reactorState) {
         setReactorState(data.reactorState);
+        setMobileTab('reactor'); // surface the result on small screens
       }
     } catch (error) {
       console.error(error);
       setMessages((prev) => [
         ...prev,
-        { id: Math.random().toString(), role: "model", content: "Sorry, an error occurred while calculating." },
+        { id: Math.random().toString(), role: 'model', content: 'Sorry, an error occurred while calculating.' },
       ]);
     } finally {
       setIsLoading(false);
@@ -308,123 +622,57 @@ export default function App() {
   };
 
   return (
-    <div className="h-screen bg-white text-[#16302D] font-sans flex flex-col overflow-hidden">
-      {/* Top Bar */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-none">
-        <h1 className="text-[14px] font-bold tracking-tight text-[#16302D]">Reactor copilot</h1>
-        <button className="p-2 hover:bg-gray-50 rounded-full transition-colors">
-          <Settings className="w-5 h-5 text-[#5C6B66]" />
-        </button>
+    <div className="flex h-screen flex-col overflow-hidden text-[#E6EFEB]">
+      {/* Top bar */}
+      <header className="flex flex-none items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
+        <div className="flex items-center gap-3">
+          <span className="h-2 w-2 animate-pulse-dot rounded-full bg-[#34D399]" />
+          <h1 className="font-display text-[15px] font-extrabold tracking-tight text-[#E6EFEB]">
+            REACTOR <span className="text-[#34D399]">COPILOT</span>
+          </h1>
+          <span className="hidden h-3 w-px bg-white/15 sm:block" />
+          <span className="hidden font-mono text-[10px] uppercase tracking-[0.18em] text-[#7E938B] sm:block">
+            Modelling Club · KNUST
+          </span>
+        </div>
+        <div className="flex items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.02] px-3 py-1">
+          <span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" />
+          <span className="font-mono text-[10px] uppercase tracking-wide text-[#7E938B]">
+            v1 · isothermal A → B
+          </span>
+        </div>
       </header>
 
-      {/* Main Grid */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-6 grid grid-cols-1 md:grid-cols-[65%_1fr] gap-6 min-h-0">
-        
-        {/* Left Column: Visualization */}
-        <section className="flex flex-col min-h-0">
-          <div className="bg-white rounded-xl border border-gray-100 p-6 flex flex-col h-full overflow-y-auto">
-            <h2 className="text-[#5C6B66] text-xs font-semibold uppercase tracking-wider mb-6">
-              Reactor Configuration
-            </h2>
-            
-            {reactorState ? (
-               <ReactorSchematic state={reactorState} />
-            ) : (
-               <div className="flex-1 flex items-center justify-center border-2 border-dashed border-gray-100 rounded-xl min-h-[200px]">
-                 <p className="text-[#5C6B66] text-sm text-center max-w-sm">
-                   Describe a reaction problem in the conversation panel to generate a reactor design and performance plot.
-                 </p>
-               </div>
-            )}
-            
-            {reactorState && <ReactorPlot state={reactorState} />}
-            {reactorState && <VerifiedBadge state={reactorState} />}
-            
-          </div>
-        </section>
+      {/* Mobile tab switch (hidden on lg, where both panels show together) */}
+      <div className="mx-auto w-full max-w-[1440px] flex-none px-3 pt-3 md:px-5 lg:hidden">
+        <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] p-1">
+          {(['chat', 'reactor'] as const).map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setMobileTab(tab)}
+              className={cn(
+                'rounded-lg py-2 font-mono text-[11px] uppercase tracking-[0.14em] transition-colors',
+                mobileTab === tab ? 'bg-[#34D399]/15 text-[#6EE7B7]' : 'text-[#7E938B] hover:text-[#E6EFEB]'
+              )}
+            >
+              {tab === 'chat' ? 'Conversation' : `Reactor${reactorState?.type ? ` · ${reactorState.type}` : ''}`}
+            </button>
+          ))}
+        </div>
+      </div>
 
-        {/* Right Column: Conversation */}
-        <section className="flex flex-col bg-white rounded-xl border border-gray-100 overflow-hidden h-full">
-          <div className="px-4 py-3 border-b border-gray-100 bg-gray-50/50">
-            <h2 className="text-[#5C6B66] text-xs font-semibold uppercase tracking-wider">
-              Conversation
-            </h2>
-          </div>
-          
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.length === 0 && (
-              <div className="text-center mt-10">
-                <p className="text-[#5C6B66] text-sm">
-                   Ask me to size a PFR or CSTR. <br/>
-                   e.g. "size a PFR to convert 90% of A to B at k=0.5/s, feed of 1 mol/s and C_A0 = 2000 mol/m³"
-                </p>
-              </div>
-            )}
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                className={cn(
-                  "flex",
-                  msg.role === "user" ? "justify-end" : "justify-start"
-                )}
-              >
-                <div
-                  className={cn(
-                    "max-w-[85%] px-4 py-3 rounded-[8px] text-[14px] leading-relaxed",
-                    msg.role === "user"
-                      ? "bg-[#E6F1FB] text-[#0A2540] rounded-br-[4px]" // User: Light blue
-                      : "bg-[#F2F1EC] text-[#16302D] rounded-bl-[4px]" // Agent: Light grey
-                  )}
-                >
-                  {msg.role === 'model' ? (
-                    <div className="prose prose-sm !text-[#16302D] max-w-none prose-p:leading-relaxed prose-headings:text-[#16302D] prose-strong:text-[#16302D] prose-a:text-[#0E7C66]">
-                      <ReactMarkdown 
-                        remarkPlugins={[remarkGfm, remarkMath]}
-                        rehypePlugins={[rehypeKatex]}
-                      >
-                        {msg.content}
-                      </ReactMarkdown>
-                    </div>
-                  ) : (
-                    <span className="whitespace-pre-wrap">{msg.content}</span>
-                  )}
-                </div>
-              </div>
-            ))}
-            {isLoading && (
-              <div className="flex justify-start">
-                <div className="max-w-[85%] px-4 py-3 bg-[#F2F1EC] text-[#5C6B66] rounded-[8px] rounded-bl-[4px] flex space-x-1 items-center h-10">
-                  <div className="w-1.5 h-1.5 bg-[#5C6B66]/60 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-                  <div className="w-1.5 h-1.5 bg-[#5C6B66]/60 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-                  <div className="w-1.5 h-1.5 bg-[#5C6B66]/60 rounded-full animate-bounce"></div>
-                </div>
-              </div>
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-
-          <form onSubmit={handleSubmit} className="p-4 border-t border-gray-100 bg-white">
-            <div className="relative flex items-end">
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={(e) => setInput(e.target.value)}
-                onKeyDown={handleKeyDown}
-                placeholder="Describe your reactor problem…"
-                className="w-full bg-[#F2F1EC] text-[#16302D] placeholder-[#5C6B66]/70 rounded-2xl pl-5 pr-12 py-3 text-[14px] focus:outline-none focus:ring-2 focus:ring-[#0E7C66]/30 transition-all border border-transparent focus:border-[#0E7C66]/20 resize-none min-h-[46px] max-h-[200px]"
-                disabled={isLoading}
-                rows={1}
-              />
-              <button
-                type="submit"
-                disabled={!input.trim() || isLoading}
-                className="absolute right-1.5 bottom-1.5 p-2 bg-[#0E7C66] text-white rounded-full hover:bg-[#0A6351] transition-colors disabled:opacity-50 disabled:hover:bg-[#0E7C66]"
-              >
-                <Send className="w-4 h-4" />
-              </button>
-            </div>
-          </form>
-        </section>
+      {/* Main */}
+      <main className="mx-auto grid min-h-0 w-full max-w-[1440px] flex-1 grid-cols-1 gap-4 overflow-hidden p-3 md:p-5 lg:grid-cols-[1.55fr_1fr] lg:gap-5">
+        <VizPanel state={reactorState} className={cn(mobileTab === 'reactor' ? 'flex' : 'hidden', 'lg:flex')} />
+        <ChatPanel
+          className={cn(mobileTab === 'chat' ? 'flex' : 'hidden', 'lg:flex')}
+          messages={messages}
+          isLoading={isLoading}
+          input={input}
+          setInput={setInput}
+          onSubmit={handleSubmit}
+          onReset={handleReset}
+        />
       </main>
     </div>
   );

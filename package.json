@@ -9,6 +9,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.cjs",
     "lint": "tsc --noEmit",
+    "test:solvers": "tsx scripts/solver-smoke.ts",
+    "probe:models": "tsx scripts/model-probe.ts",
     "start": "node dist/server.cjs"
   },
   "dependencies": {

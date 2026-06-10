@@ -1,21 +1,62 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=DM+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap');
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --color-teal-primary: #0E7C66;
-  --color-coral-accent: #E2603A;
+  --font-sans: "IBM Plex Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "DM Mono", ui-monospace, monospace;
 }
 
-@keyframes pfr-flow {
-  0% { transform: translateX(0); opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 1; }
-  100% { transform: translateX(400px); opacity: 0; }
+:root {
+  color-scheme: dark;
 }
 
-@keyframes cstr-stir {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+html, body, #root {
+  height: 100%;
 }
+
+body {
+  background-color: #070B0A;
+  background-image:
+    radial-gradient(900px 520px at 36% -12%, rgba(52, 211, 153, 0.14), transparent 60%),
+    radial-gradient(720px 600px at 96% 118%, rgba(34, 211, 238, 0.06), transparent 60%),
+    linear-gradient(rgba(120, 200, 170, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(120, 200, 170, 0.035) 1px, transparent 1px);
+  background-size: auto, auto, 34px 34px, 34px 34px;
+  background-attachment: fixed;
+  color: #E6EFEB;
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbars — thin and on-theme */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(120, 200, 170, 0.25) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: rgba(120, 200, 170, 0.20); border-radius: 4px; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(120, 200, 170, 0.38); }
+
+::selection { background: rgba(52, 211, 153, 0.32); color: #ffffff; }
+
+/* Reusable glow helpers */
+.glow-text { text-shadow: 0 0 14px rgba(52, 211, 153, 0.55); }
+.glow-soft { box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.18), 0 0 28px rgba(52, 211, 153, 0.10); }
+
+/* Animations */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55); }
+  50% { opacity: 0.55; box-shadow: 0 0 0 7px rgba(52, 211, 153, 0); }
+}
+.animate-pulse-dot { animation: pulse-dot 2.2s ease-in-out infinite; }
+
+@keyframes rise {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-rise { animation: rise 0.45s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* KaTeX should inherit the light text colour inside dark bubbles */
+.katex { color: inherit; }
