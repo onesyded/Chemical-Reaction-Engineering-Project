@@ -22,7 +22,7 @@ const FALLBACK_MODELS = Array.from(new Set([MODEL, "gemini-2.5-flash-lite"]));
 // Deliberate beat between the reactor building in the viz and the explanation
 // starting in the chat (tune to taste). Eventually this is the seam where a
 // dedicated "explainer agent" takes over.
-const REACTOR_BEAT_MS = 600;
+const REACTOR_BEAT_MS = 350;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function isTransientOverload(e: any): boolean {
@@ -369,7 +369,7 @@ async function startServer() {
       const finalText = (generationResponse as any).text ?? "";
       for (const piece of chunkText(finalText)) {
         emit({ type: "delta", text: piece });
-        await sleep(12);
+        await sleep(8);
       }
 
       session.history = await chat.getHistory();

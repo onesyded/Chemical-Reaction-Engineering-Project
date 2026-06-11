@@ -45,6 +45,13 @@ function residenceTime(s: ReactorState): number | undefined {
   return (s.volume * s.C_A0) / s.F_A0;
 }
 
+// Flow-animation duration ≈ residence time (clamped so it stays watchable).
+function flowDur(s: ReactorState): number {
+  const tau = residenceTime(s);
+  if (!tau || !isFinite(tau)) return 2.4;
+  return Math.max(1.2, Math.min(5, tau));
+}
+
 // The design equation actually applied, in general (any-order) Levenspiel form.
 function designEquation(s: ReactorState): string {
   const rate = '\\;\\; -r_A = k\\,C_{A0}^{\\,n}(1-X)^n';
@@ -135,11 +142,13 @@ const glowFilter = (
   </filter>
 );
 
-function PFRSchematic({ conversion = 0 }: { conversion?: number }) {
-  // Bright end of the gradient tracks how far conversion has progressed.
+function PFRSchematic({ state }: { state: ReactorState }) {
+  const conversion = state.conversion ?? 0;
+  // Bright end of the gradient tracks the real conversion; flow speed ≈ residence time.
   const brightStop = `${Math.max(8, Math.min(100, conversion * 100)).toFixed(0)}%`;
+  const dur = `${flowDur(state).toFixed(1)}s`;
   return (
-    <svg viewBox="0 0 420 150" width="100%" height="100%" className="overflow-visible">
+    <svg viewBox="0 0 420 162" width="100%" height="100%" className="overflow-visible">
       <defs>
         {glowFilter}
         <linearGradient id="pfr-fill" x1="0" y1="0" x2="1" y2="0">
@@ -148,45 +157,52 @@ function PFRSchematic({ conversion = 0 }: { conversion?: number }) {
           <stop offset="100%" stopColor="#A7F3D0" />
         </linearGradient>
         <clipPath id="pfr-clip">
-          <rect x="34" y="52" width="352" height="46" rx="23" />
+          <rect x="34" y="50" width="352" height="46" rx="23" />
         </clipPath>
       </defs>
 
       {/* inlet / outlet stubs */}
-      <rect x="12" y="68" width="26" height="14" rx="3" fill="#16201D" stroke="#2C3A35" strokeWidth="1.5" />
-      <rect x="382" y="68" width="26" height="14" rx="3" fill="#16201D" stroke="#2C3A35" strokeWidth="1.5" />
+      <rect x="12" y="66" width="26" height="14" rx="3" fill="#16201D" stroke="#2C3A35" strokeWidth="1.5" />
+      <rect x="382" y="66" width="26" height="14" rx="3" fill="#16201D" stroke="#2C3A35" strokeWidth="1.5" />
 
-      {/* tube body */}
+      {/* tube body — particles shift coral (A) → emerald (B) as they travel */}
       <g clipPath="url(#pfr-clip)">
-        <rect x="34" y="52" width="352" height="46" fill="url(#pfr-fill)" />
-        {/* flowing reactant particles */}
-        {[0, 0.5, 1, 1.5].map((delay, i) => (
-          <circle key={i} cx="34" cy="75" r="3.4" fill={CORAL} opacity="0.9">
-            <animate attributeName="cx" from="34" to="386" dur="2.4s" begin={`${delay}s`} repeatCount="indefinite" />
-            <animate attributeName="opacity" values="0;0.95;0.95;0" dur="2.4s" begin={`${delay}s`} repeatCount="indefinite" />
+        <rect x="34" y="50" width="352" height="46" fill="url(#pfr-fill)" />
+        {[0, 0.6, 1.2, 1.8].map((delay, i) => (
+          <circle key={i} cx="34" cy="73" r="3.4" fill={CORAL}>
+            <animate attributeName="cx" from="34" to="386" dur={dur} begin={`${delay}s`} repeatCount="indefinite" />
+            <animate attributeName="fill" values="#FB7185;#FB7185;#34D399" dur={dur} begin={`${delay}s`} repeatCount="indefinite" />
+            <animate attributeName="opacity" values="0;0.95;0.95;0" dur={dur} begin={`${delay}s`} repeatCount="indefinite" />
           </circle>
         ))}
       </g>
       <rect
-        x="34" y="52" width="352" height="46" rx="23"
-        fill="none" stroke={EM} strokeWidth="1.6" opacity="0.65"
+        x="34" y="50" width="352" height="46" rx="23"
+        fill="none" stroke={EM} strokeWidth="1.6" opacity="0.6"
         filter="url(#reactor-glow)"
       />
 
-      {/* labels */}
-      <text x="14" y="104" className="font-mono" fontSize="10" fill="#7E938B">A in</text>
-      <text x="372" y="104" className="font-mono" fontSize="10" fill="#7E938B">B out</text>
-      <text x="210" y="34" textAnchor="middle" className="font-mono" fontSize="11" fill="#6EE7B7" letterSpacing="2">
+      <text x="210" y="32" textAnchor="middle" className="font-mono" fontSize="11" fill="#6EE7B7" letterSpacing="2">
         PLUG FLOW
+      </text>
+
+      {/* live values */}
+      <text x="12" y="116" className="font-mono" fontSize="10" fill="#9FB0AA">A in</text>
+      <text x="408" y="116" textAnchor="end" className="font-mono" fontSize="10" fill="#9FB0AA">B out</text>
+      <text x="408" y="130" textAnchor="end" className="font-mono" fontSize="11" fill="#6EE7B7">X {fmt(state.conversion)}</text>
+      <text x="210" y="130" textAnchor="middle" className="font-mono" fontSize="10" fill="#7E938B">
+        V {fmt(state.volume)} m³ · τ {fmt(residenceTime(state))} s
       </text>
     </svg>
   );
 }
 
-function CSTRSchematic({ conversion = 0 }: { conversion?: number }) {
+function CSTRSchematic({ state }: { state: ReactorState }) {
+  const conversion = state.conversion ?? 0;
+  // Fill brightness tracks the real exit conversion.
   const fillOpacity = (0.18 + conversion * 0.6).toFixed(2);
   return (
-    <svg viewBox="0 0 300 150" width="100%" height="100%" className="overflow-visible">
+    <svg viewBox="0 0 300 174" width="100%" height="100%" className="overflow-visible">
       <defs>
         {glowFilter}
         <linearGradient id="cstr-fill" x1="0" y1="0" x2="0" y2="1">
@@ -196,25 +212,25 @@ function CSTRSchematic({ conversion = 0 }: { conversion?: number }) {
       </defs>
 
       {/* inlet pipe (top-left) */}
-      <path d="M40 18 H96 V40" fill="none" stroke="#2C3A35" strokeWidth="3" />
-      <circle cx="40" cy="18" r="3" fill={CORAL} opacity="0.9">
+      <path d="M40 16 H96 V38" fill="none" stroke="#2C3A35" strokeWidth="3" />
+      <circle cx="40" cy="16" r="3" fill={CORAL}>
         <animate attributeName="opacity" values="0.3;1;0.3" dur="1.6s" repeatCount="indefinite" />
       </circle>
       {/* outlet pipe (bottom-right) */}
-      <path d="M204 120 H260 V134" fill="none" stroke="#2C3A35" strokeWidth="3" />
+      <path d="M204 118 H260 V132" fill="none" stroke="#2C3A35" strokeWidth="3" />
 
       {/* vessel */}
-      <rect x="96" y="34" width="108" height="92" rx="16" fill="url(#cstr-fill)" fillOpacity={fillOpacity} />
+      <rect x="96" y="32" width="108" height="92" rx="16" fill="url(#cstr-fill)" fillOpacity={fillOpacity} />
       <rect
-        x="96" y="34" width="108" height="92" rx="16"
+        x="96" y="32" width="108" height="92" rx="16"
         fill="none" stroke={EM} strokeWidth="1.8" opacity="0.7" filter="url(#reactor-glow)"
       />
       {/* liquid surface line */}
-      <line x1="100" y1="50" x2="200" y2="50" stroke={EM} strokeWidth="1" opacity="0.35" />
+      <line x1="100" y1="48" x2="200" y2="48" stroke={EM} strokeWidth="1" opacity="0.35" />
 
       {/* stirrer shaft + impeller */}
-      <rect x="148" y="22" width="4" height="66" rx="2" fill="#5C6B66" />
-      <g transform="translate(150, 92)">
+      <rect x="148" y="20" width="4" height="66" rx="2" fill="#5C6B66" />
+      <g transform="translate(150, 90)">
         <g>
           <rect x="-26" y="-3" width="52" height="6" rx="3" fill="#9FB0AA" />
           <rect x="-3" y="-26" width="6" height="52" rx="3" fill="#9FB0AA" opacity="0.5" />
@@ -224,14 +240,19 @@ function CSTRSchematic({ conversion = 0 }: { conversion?: number }) {
 
       {/* rising bubbles for the well-mixed feel */}
       {[120, 150, 178].map((x, i) => (
-        <circle key={i} cx={x} cy="116" r="2.2" fill="#A7F3D0" opacity="0.6">
-          <animate attributeName="cy" values="116;58" dur={`${2 + i * 0.4}s`} repeatCount="indefinite" />
+        <circle key={i} cx={x} cy="114" r="2.2" fill="#A7F3D0" opacity="0.6">
+          <animate attributeName="cy" values="114;56" dur={`${2 + i * 0.4}s`} repeatCount="indefinite" />
           <animate attributeName="opacity" values="0;0.7;0" dur={`${2 + i * 0.4}s`} repeatCount="indefinite" />
         </circle>
       ))}
 
+      <text x="22" y="30" className="font-mono" fontSize="10" fill="#9FB0AA">A</text>
+      <text x="276" y="128" textAnchor="end" className="font-mono" fontSize="10" fill="#9FB0AA">B</text>
       <text x="150" y="146" textAnchor="middle" className="font-mono" fontSize="11" fill="#6EE7B7" letterSpacing="2">
         WELL MIXED
+      </text>
+      <text x="150" y="164" textAnchor="middle" className="font-mono" fontSize="10" fill="#7E938B">
+        X {fmt(state.conversion)} · V {fmt(state.volume)} m³ · τ {fmt(residenceTime(state))} s
       </text>
     </svg>
   );
@@ -261,12 +282,8 @@ function ReactorStage({ state }: { state: ReactorState | null }) {
       <div className="absolute left-4 top-3 font-mono text-[11px] uppercase tracking-[0.16em] text-[#7E938B]">
         {state.type === 'PFR' ? 'Tubular reactor' : 'Stirred tank'}
       </div>
-      <div className={cn('px-6', state.type === 'PFR' ? 'w-full max-w-xl' : 'w-44')}>
-        {state.type === 'PFR' ? (
-          <PFRSchematic conversion={state.conversion} />
-        ) : (
-          <CSTRSchematic conversion={state.conversion} />
-        )}
+      <div className={cn('px-6', state.type === 'PFR' ? 'w-full max-w-xl' : 'w-60')}>
+        {state.type === 'PFR' ? <PFRSchematic state={state} /> : <CSTRSchematic state={state} />}
       </div>
     </div>
   );
@@ -425,7 +442,7 @@ function VizPanel({
   className?: string;
 }) {
   return (
-    <section className={cn('min-h-0 flex-col overflow-hidden rounded-3xl border border-white/[0.05] bg-gradient-to-b from-white/[0.035] to-white/[0.004] shadow-[0_24px_70px_-45px_rgba(0,0,0,0.85)] backdrop-blur-xl', className)}>
+    <section className={cn('min-h-0 flex-col overflow-hidden rounded-3xl border border-white/[0.05] bg-gradient-to-b from-[#0E1514] to-[#0A100E] shadow-[0_24px_70px_-45px_rgba(0,0,0,0.85)]', className)}>
       <div className="flex flex-none items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
         <h2 className="font-display text-sm font-bold tracking-tight text-[#E6EFEB]">
           {thinking ? 'Agent' : 'Reactor'}
@@ -543,7 +560,7 @@ function ChatPanel({
   };
 
   return (
-    <section className={cn('min-h-0 flex-col overflow-hidden rounded-3xl border border-white/[0.05] bg-gradient-to-b from-white/[0.035] to-white/[0.004] shadow-[0_24px_70px_-45px_rgba(0,0,0,0.85)] backdrop-blur-xl', className)}>
+    <section className={cn('min-h-0 flex-col overflow-hidden rounded-3xl border border-white/[0.05] bg-gradient-to-b from-[#0E1514] to-[#0A100E] shadow-[0_24px_70px_-45px_rgba(0,0,0,0.85)]', className)}>
       <div className="flex flex-none items-center justify-between border-b border-white/[0.06] px-4 py-3.5">
         <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#7E938B]">
           Conversation

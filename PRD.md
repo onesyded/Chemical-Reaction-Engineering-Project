@@ -261,6 +261,10 @@ The visualisation panel is the **centrepiece**. It takes 65% of the horizontal s
 | v6 | Aspen integration — industrial-grade simulation |
 | v7 | MATLAB + advanced AI — dynamic simulation, RL optimisation |
 
+### Platform direction — toward a desktop app
+
+V1 ships as a web app, but the long-term target is a **desktop application** (e.g. Electron/Tauri). The visualisation is the centrepiece, and desktop unlocks **real, performant 3D** — GPU-accelerated, a larger viewport, and locally-bundled assets — where **transparent 3D reactors showing the flow inside become extremely effective**, and far smoother than in the browser. The current SVG schematics (now driven by the live numbers — gradient/fill track real conversion, flow speed ≈ residence time) are the 2D foundation and fallback; the high-quality 3D reactor library (Sketchfab/Meshy/CGTrader, decimated + Draco-compressed, per the deck) lands once we're on desktop. **Design implication:** keep the viz layer cleanly swappable so a 3D renderer can drop in behind the same interface.
+
 ---
 
 ## 12. Definition of Done (V1)
