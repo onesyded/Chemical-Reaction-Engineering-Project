@@ -280,7 +280,7 @@ function ConversionPlot({ state }: { state: ReactorState }) {
   const data = state.profile && state.profile.length > 1 ? state.profile : null;
 
   return (
-    <div className="mt-5 flex h-60 w-full flex-col rounded-2xl bg-white/[0.02] p-5">
+    <div className="flex h-[260px] w-full flex-col rounded-2xl bg-white/[0.02] p-5">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#7E938B]">
           Conversion vs Volume
@@ -415,11 +415,13 @@ function VizPanel({
   state,
   thinking,
   trace,
+  wide,
   className,
 }: {
   state: ReactorState | null;
   thinking: boolean;
   trace: TraceStep[];
+  wide: boolean;
   className?: string;
 }) {
   return (
@@ -434,48 +436,55 @@ function VizPanel({
 
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
         <div key={thinking ? 'thinking' : 'result'} className="animate-fade-in">
-        {thinking ? (
-          <ThinkingPanel trace={trace} />
-        ) : (
-          <>
+          {thinking ? (
+            <ThinkingPanel trace={trace} />
+          ) : !state?.type ? (
             <ReactorStage state={state} />
+          ) : (
+            <div className={cn('grid grid-cols-1 gap-5', wide && 'lg:grid-cols-2')}>
+              <ReactorStage state={state} />
+              <ConversionPlot state={state} />
 
-            {state?.type && (
-              <>
-                {state.error && (
-                  <div className="mt-4 flex items-start gap-2 rounded-lg border border-[#FBBF24]/25 bg-[#FBBF24]/10 px-3 py-2.5 text-sm text-[#FCD34D]">
-                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
-                    <span>{state.error}</span>
-                  </div>
+              {state.error && (
+                <div
+                  className={cn(
+                    'flex items-start gap-2 rounded-xl border border-[#FBBF24]/25 bg-[#FBBF24]/10 px-4 py-3 text-sm text-[#FCD34D]',
+                    wide && 'lg:col-span-2'
+                  )}
+                >
+                  <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
+                  <span>{state.error}</span>
+                </div>
+              )}
+
+              <div
+                className={cn(
+                  'grid grid-cols-2 gap-x-6 gap-y-5 rounded-2xl bg-white/[0.02] px-6 py-5 sm:grid-cols-3',
+                  wide && 'lg:col-span-2 lg:grid-cols-6'
                 )}
+              >
+                <Readout label="Volume" value={fmt(state.volume)} unit="m³" accent />
+                <Readout label="Conversion" value={fmt(state.conversion)} accent />
+                <Readout label="Residence τ" value={fmt(residenceTime(state))} unit="s" />
+                <Readout label="Rate const k" value={fmt(state.k)} />
+                <Readout label="Feed F_A0" value={fmt(state.F_A0)} unit="mol/s" />
+                <Readout label="Conc C_A0" value={fmt(state.C_A0)} unit="mol/m³" />
+              </div>
 
-                <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5 rounded-2xl bg-white/[0.02] px-6 py-5 sm:grid-cols-3">
-                  <Readout label="Volume" value={fmt(state.volume)} unit="m³" accent />
-                  <Readout label="Conversion" value={fmt(state.conversion)} accent />
-                  <Readout label="Residence τ" value={fmt(residenceTime(state))} unit="s" />
-                  <Readout label="Rate const k" value={fmt(state.k)} />
-                  <Readout label="Feed F_A0" value={fmt(state.F_A0)} unit="mol/s" />
-                  <Readout label="Conc C_A0" value={fmt(state.C_A0)} unit="mol/m³" />
+              <div className={cn('border-t border-white/[0.05] pt-5', wide && 'lg:col-span-2')}>
+                <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#7E938B]">
+                  Model &amp; assumptions
                 </div>
-
-                <div className="mt-6 border-t border-white/[0.05] pt-5">
-                  <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#7E938B]">
-                    Model &amp; assumptions
-                  </div>
-                  <p className="mb-3 text-sm text-[#B7C7C1]">
-                    Isothermal · {state.order === 1 ? 'first-order' : `${fmt(state.order)}-order`} in A · A → B ·
-                    constant density
-                  </p>
-                  <div className="overflow-x-auto text-[15px] text-[#E6EFEB]">
-                    <MathInline tex={designEquation(state)} />
-                  </div>
+                <p className="mb-3 text-sm text-[#B7C7C1]">
+                  Isothermal · {state.order === 1 ? 'first-order' : `${fmt(state.order)}-order`} in A · A → B ·
+                  constant density
+                </p>
+                <div className="overflow-x-auto text-[15px] text-[#E6EFEB]">
+                  <MathInline tex={designEquation(state)} />
                 </div>
-
-                <ConversionPlot state={state} />
-              </>
-            )}
-          </>
-        )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </section>
@@ -819,6 +828,7 @@ export default function App() {
           state={reactorState}
           thinking={isLoading && !reactorBuilt}
           trace={agentTrace}
+          wide={chatCollapsed}
           className={cn(mobileTab === 'reactor' ? 'flex' : 'hidden', 'lg:flex')}
         />
         <ChatPanel
