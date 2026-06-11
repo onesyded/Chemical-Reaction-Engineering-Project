@@ -74,13 +74,13 @@ function Readout({
   accent?: boolean;
 }) {
   return (
-    <div className="flex flex-col gap-1 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2.5">
-      <span className="font-mono text-[10px] uppercase tracking-[0.14em] text-[#7E938B]">
+    <div className="flex flex-col gap-1.5">
+      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[#7E938B]">
         {label}
       </span>
       <span
         className={cn(
-          'font-mono text-lg leading-none tabular-nums',
+          'font-mono text-[22px] leading-none tabular-nums',
           accent ? 'text-[#34D399] glow-text' : 'text-[#E6EFEB]'
         )}
       >
@@ -244,7 +244,7 @@ function CSTRSchematic({ conversion = 0 }: { conversion?: number }) {
 function ReactorStage({ state }: { state: ReactorState | null }) {
   if (!state || !state.type) {
     return (
-      <div className="relative flex h-[230px] items-center justify-center rounded-xl border border-dashed border-white/10 bg-white/[0.015]">
+      <div className="relative flex h-[260px] items-center justify-center rounded-2xl border border-dashed border-white/[0.08] bg-white/[0.012]">
         <div className="max-w-xs text-center">
           <Activity className="mx-auto mb-3 h-6 w-6 text-[#34D399]/50" />
           <p className="text-sm text-[#7E938B]">
@@ -257,7 +257,7 @@ function ReactorStage({ state }: { state: ReactorState | null }) {
   }
 
   return (
-    <div className="relative flex h-[230px] items-center justify-center overflow-hidden rounded-xl border border-white/5 bg-[radial-gradient(420px_220px_at_50%_30%,rgba(52,211,153,0.10),transparent_70%)]">
+    <div className="relative flex h-[260px] items-center justify-center overflow-hidden rounded-2xl bg-[radial-gradient(460px_240px_at_50%_35%,rgba(52,211,153,0.11),transparent_70%)]">
       <div className="absolute left-4 top-3 font-mono text-[11px] uppercase tracking-[0.16em] text-[#7E938B]">
         {state.type === 'PFR' ? 'Tubular reactor' : 'Stirred tank'}
       </div>
@@ -280,7 +280,7 @@ function ConversionPlot({ state }: { state: ReactorState }) {
   const data = state.profile && state.profile.length > 1 ? state.profile : null;
 
   return (
-    <div className="mt-4 flex h-60 w-full flex-col rounded-xl border border-white/5 bg-white/[0.015] p-4">
+    <div className="mt-5 flex h-60 w-full flex-col rounded-2xl bg-white/[0.02] p-5">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-mono text-[11px] uppercase tracking-[0.16em] text-[#7E938B]">
           Conversion vs Volume
@@ -381,7 +381,7 @@ function StepIcon({ step }: { step: TraceStep }) {
 
 function ThinkingPanel({ trace }: { trace: TraceStep[] }) {
   return (
-    <div className="flex min-h-[230px] flex-col rounded-xl border border-[#34D399]/15 bg-[radial-gradient(520px_240px_at_50%_0%,rgba(52,211,153,0.08),transparent_70%)] p-5">
+    <div className="flex min-h-[260px] flex-col rounded-2xl border border-[#34D399]/10 bg-[radial-gradient(560px_260px_at_50%_0%,rgba(52,211,153,0.09),transparent_70%)] p-6">
       <div className="mb-5 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#6EE7B7]">
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
         Agent working
@@ -423,7 +423,7 @@ function VizPanel({
   className?: string;
 }) {
   return (
-    <section className={cn('min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0B100F]/80 backdrop-blur', className)}>
+    <section className={cn('min-h-0 flex-col overflow-hidden rounded-3xl border border-white/[0.05] bg-gradient-to-b from-white/[0.035] to-white/[0.004] shadow-[0_24px_70px_-45px_rgba(0,0,0,0.85)] backdrop-blur-xl', className)}>
       <div className="flex flex-none items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
         <h2 className="font-display text-sm font-bold tracking-tight text-[#E6EFEB]">
           {thinking ? 'Agent' : 'Reactor'}
@@ -449,7 +449,7 @@ function VizPanel({
                   </div>
                 )}
 
-                <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                <div className="mt-5 grid grid-cols-2 gap-x-6 gap-y-5 rounded-2xl bg-white/[0.02] px-6 py-5 sm:grid-cols-3">
                   <Readout label="Volume" value={fmt(state.volume)} unit="m³" accent />
                   <Readout label="Conversion" value={fmt(state.conversion)} accent />
                   <Readout label="Residence τ" value={fmt(residenceTime(state))} unit="s" />
@@ -458,7 +458,7 @@ function VizPanel({
                   <Readout label="Conc C_A0" value={fmt(state.C_A0)} unit="mol/m³" />
                 </div>
 
-                <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.015] p-4">
+                <div className="mt-6 border-t border-white/[0.05] pt-5">
                   <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#7E938B]">
                     Model &amp; assumptions
                   </div>
@@ -532,7 +532,7 @@ function ChatPanel({
   };
 
   return (
-    <section className={cn('min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0B100F]/80 backdrop-blur', className)}>
+    <section className={cn('min-h-0 flex-col overflow-hidden rounded-3xl border border-white/[0.05] bg-gradient-to-b from-white/[0.035] to-white/[0.004] shadow-[0_24px_70px_-45px_rgba(0,0,0,0.85)] backdrop-blur-xl', className)}>
       <div className="flex flex-none items-center justify-between border-b border-white/[0.06] px-4 py-3.5">
         <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#7E938B]">
           Conversation
@@ -558,7 +558,7 @@ function ChatPanel({
                 <button
                   key={ex}
                   onClick={() => setInput(ex)}
-                  className="block w-full rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5 text-left text-[13px] leading-snug text-[#B7C7C1] transition-colors hover:border-[#34D399]/30 hover:bg-[#34D399]/[0.06]"
+                  className="block w-full rounded-xl bg-white/[0.03] px-4 py-3 text-left text-[13px] leading-snug text-[#B7C7C1] transition-colors hover:bg-[#34D399]/[0.08] hover:text-[#E6EFEB]"
                 >
                   {ex}
                 </button>
@@ -573,8 +573,8 @@ function ChatPanel({
               className={cn(
                 'max-w-[88%] rounded-2xl px-4 py-3 text-[14px] leading-relaxed',
                 msg.role === 'user'
-                  ? 'rounded-br-md border border-[#34D399]/20 bg-[#34D399]/[0.10] text-[#E6EFEB]'
-                  : 'rounded-bl-md border border-white/[0.06] bg-white/[0.03] text-[#D6E2DD]'
+                  ? 'rounded-br-md bg-[#34D399]/[0.13] text-[#E6EFEB]'
+                  : 'rounded-bl-md bg-white/[0.045] text-[#D6E2DD]'
               )}
             >
               {msg.role === 'model' ? (
@@ -592,7 +592,7 @@ function ChatPanel({
 
         {streamingText && (
           <div className="flex justify-start">
-            <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-white/[0.06] bg-white/[0.03] px-4 py-3 text-[14px] leading-relaxed text-[#D6E2DD]">
+            <div className="max-w-[88%] rounded-2xl rounded-bl-md bg-white/[0.045] px-4 py-3 text-[14px] leading-relaxed text-[#D6E2DD]">
               <span className="whitespace-pre-wrap">{streamingText}</span>
               <span className="ml-0.5 inline-block h-3.5 w-[3px] translate-y-0.5 animate-pulse bg-[#34D399] align-middle" />
             </div>
@@ -601,7 +601,7 @@ function ChatPanel({
 
         {isLoading && !streamingText && (
           <div className="flex justify-start">
-            <div className="flex items-center gap-2 rounded-2xl rounded-bl-md border border-white/[0.06] bg-white/[0.03] px-4 py-3 font-mono text-[11px] tracking-wide text-[#7E938B]">
+            <div className="flex items-center gap-2 rounded-2xl rounded-bl-md bg-white/[0.045] px-4 py-3 font-mono text-[11px] tracking-wide text-[#7E938B]">
               <Loader2 className="h-3.5 w-3.5 animate-spin text-[#34D399]" />
               thinking…
             </div>
@@ -759,7 +759,7 @@ export default function App() {
             Modelling Club · KNUST
           </span>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-white/[0.07] bg-white/[0.02] px-3 py-1">
+        <div className="flex items-center gap-2 rounded-full bg-white/[0.04] px-3 py-1">
           <span className="h-1.5 w-1.5 rounded-full bg-[#34D399]" />
           <span className="font-mono text-[10px] uppercase tracking-wide text-[#7E938B]">
             v1 · isothermal A → B
@@ -769,7 +769,7 @@ export default function App() {
 
       {/* Mobile tab switch (hidden on lg, where both panels show together) */}
       <div className="mx-auto w-full max-w-[1440px] flex-none px-3 pt-3 md:px-5 lg:hidden">
-        <div className="grid grid-cols-2 gap-1 rounded-xl border border-white/[0.07] bg-white/[0.02] p-1">
+        <div className="grid grid-cols-2 gap-1 rounded-2xl bg-white/[0.03] p-1">
           {(['chat', 'reactor'] as const).map((tab) => (
             <button
               key={tab}
