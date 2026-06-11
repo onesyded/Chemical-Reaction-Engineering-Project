@@ -145,6 +145,84 @@ function buildCSTRProfile(F_A0: number, C_A0: number, k: number, order: number, 
   return profile;
 }
 
+// Run one solver tool call. Returns the raw result (fed back to the model) and the
+// reactorState the UI renders. Shared by the buffered and streaming endpoints.
+function runToolCall(call: any): { toolResponse: any; reactorState: any } {
+  try {
+    const args = call.args as any;
+    const order = args.order ?? 1;
+    const common = { order, k: args.k, F_A0: args.F_A0, C_A0: args.C_A0 };
+
+    if (call.name === "size_cstr") {
+      const r = sizeCSTR(args);
+      return { toolResponse: r, reactorState: {
+        type: "CSTR", volume: r.V, conversion: args.X_target, ...common,
+        profile: r.ok ? buildCSTRProfile(args.F_A0, args.C_A0, args.k, order, r.V) : undefined,
+        checks: { validConversion: r.validConversion, positiveVolume: r.positiveVolume }, ok: r.ok, error: r.error,
+      } };
+    }
+    if (call.name === "size_pfr") {
+      const r = sizePFR(args);
+      return { toolResponse: r, reactorState: {
+        type: "PFR", volume: r.V, conversion: args.X_target, ...common,
+        profile: r.profile,
+        checks: { validConversion: r.validConversion, positiveVolume: r.positiveVolume }, ok: r.ok, error: r.error,
+      } };
+    }
+    if (call.name === "conversion_in_cstr") {
+      const r = conversionInCSTR(args);
+      return { toolResponse: r, reactorState: {
+        type: "CSTR", volume: args.V, conversion: r.X, ...common,
+        profile: r.ok ? buildCSTRProfile(args.F_A0, args.C_A0, args.k, order, args.V) : undefined,
+        checks: { validConversion: r.validConversion, positiveVolume: r.positiveVolume }, ok: r.ok, error: r.error,
+      } };
+    }
+    if (call.name === "conversion_in_pfr") {
+      const r = conversionInPFR(args);
+      return { toolResponse: r, reactorState: {
+        type: "PFR", volume: args.V, conversion: r.X, ...common,
+        profile: r.profile,
+        checks: { validConversion: r.validConversion, positiveVolume: r.positiveVolume }, ok: r.ok, error: r.error,
+      } };
+    }
+    return { toolResponse: { ok: false, error: `Unknown tool ${call.name}` }, reactorState: null };
+  } catch (e: any) {
+    return { toolResponse: { ok: false, error: e.message }, reactorState: null };
+  }
+}
+
+// Friendly, no-plumbing description of a tool call for the live trace (the args are the
+// user's own inputs, shown as readable engineering — never raw JSON or internals).
+function toolTrace(call: any): { label: string; detail: string } {
+  const a = (call.args ?? {}) as any;
+  const kind = call.name.includes("cstr") ? "CSTR" : "PFR";
+  const prefix = (a.order ?? 1) === 1 ? "" : `${a.order}-order · `;
+  if (call.name.startsWith("size")) {
+    return {
+      label: `Sizing the ${kind} with the verified solver`,
+      detail: `${prefix}F_A0 = ${a.F_A0} mol/s · C_A0 = ${a.C_A0} mol/m³ · k = ${a.k} · target X = ${Math.round((a.X_target ?? 0) * 100)}%`,
+    };
+  }
+  return {
+    label: `Finding conversion in the ${kind} with the verified solver`,
+    detail: `${prefix}F_A0 = ${a.F_A0} mol/s · C_A0 = ${a.C_A0} mol/m³ · k = ${a.k} · V = ${a.V} m³`,
+  };
+}
+
+// Map Gemini history to the client's text-only chat messages.
+function toClientHistory(history: any[]) {
+  return history.map((turn: any) => {
+    const textParts = (turn.parts || []).filter((p: any) => p.text);
+    if (textParts.length === 0) return null;
+    return { id: Math.random().toString(), role: turn.role, content: textParts.map((p: any) => p.text).join("\n") };
+  }).filter(Boolean);
+}
+
+// Split text into small tokens for a typewriter reveal over SSE.
+function chunkText(s: string): string[] {
+  return s.match(/\S+\s*/g) ?? [];
+}
+
 // Send a message on an existing chat, retrying transient overload (503/429) on the same model.
 async function sendWithRetry(chat: any, payload: any, attempts = 3) {
   let lastErr: any;
@@ -177,22 +255,37 @@ async function startChat(history: any[], message: any) {
   throw lastErr;
 }
 
+// Same as startChat, but emits a 'busy' note to the live trace on each overload retry.
+async function startChatStreaming(history: any[], message: any, emit: (e: any) => void) {
+  let lastErr: any;
+  for (let mi = 0; mi < FALLBACK_MODELS.length; mi++) {
+    const model = FALLBACK_MODELS[mi];
+    const chat = ai.chats.create({ model, history, config: { systemInstruction, tools } });
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const response = await chat.sendMessage({ message });
+        return { chat, response };
+      } catch (e) {
+        lastErr = e;
+        if (!isTransientOverload(e)) throw e;
+        emit({ type: "stage", id: `busy-${mi}-${attempt}`, label: "Model busy — retrying…", status: "done", warn: true });
+        await sleep(700);
+      }
+    }
+  }
+  throw lastErr;
+}
+
 async function startServer() {
   const app = express();
   app.use(express.json());
   const PORT = Number(process.env.PORT) || 3000;
 
+  // Buffered endpoint (kept as a fallback for non-streaming clients).
   app.post("/api/chat", async (req, res) => {
     try {
       const { sessionId, message } = req.body;
-
-      if (!sessions[sessionId]) {
-        sessions[sessionId] = {
-          history: [],
-          reactorState: null
-        };
-      }
-
+      if (!sessions[sessionId]) sessions[sessionId] = { history: [], reactorState: null };
       const session = sessions[sessionId];
 
       const { chat, response: firstResponse } = await startChat(session.history, message);
@@ -201,121 +294,88 @@ async function startServer() {
       let functionCalls = generationResponse.functionCalls;
       while (functionCalls && functionCalls.length > 0) {
         const call = functionCalls[0];
-        let toolResponse: any = {};
-
-        try {
-          const args = call.args as any;
-          const order = args.order ?? 1;
-
-          if (call.name === "size_cstr") {
-            const result = sizeCSTR(args);
-            toolResponse = result;
-            session.reactorState = {
-              type: "CSTR",
-              volume: result.V,
-              conversion: args.X_target,
-              order,
-              k: args.k,
-              F_A0: args.F_A0,
-              C_A0: args.C_A0,
-              profile: result.ok
-                ? buildCSTRProfile(args.F_A0, args.C_A0, args.k, order, result.V)
-                : undefined,
-              checks: { validConversion: result.validConversion, positiveVolume: result.positiveVolume },
-              ok: result.ok,
-              error: result.error,
-            };
-          } else if (call.name === "size_pfr") {
-            const result = sizePFR(args);
-            toolResponse = result;
-            session.reactorState = {
-              type: "PFR",
-              volume: result.V,
-              conversion: args.X_target,
-              order,
-              k: args.k,
-              F_A0: args.F_A0,
-              C_A0: args.C_A0,
-              profile: result.profile,
-              checks: { validConversion: result.validConversion, positiveVolume: result.positiveVolume },
-              ok: result.ok,
-              error: result.error,
-            };
-          } else if (call.name === "conversion_in_cstr") {
-            const result = conversionInCSTR(args);
-            toolResponse = result;
-            session.reactorState = {
-              type: "CSTR",
-              volume: args.V,
-              conversion: result.X,
-              order,
-              k: args.k,
-              F_A0: args.F_A0,
-              C_A0: args.C_A0,
-              profile: result.ok
-                ? buildCSTRProfile(args.F_A0, args.C_A0, args.k, order, args.V)
-                : undefined,
-              checks: { validConversion: result.validConversion, positiveVolume: result.positiveVolume },
-              ok: result.ok,
-              error: result.error,
-            };
-          } else if (call.name === "conversion_in_pfr") {
-            const result = conversionInPFR(args);
-            toolResponse = result;
-            session.reactorState = {
-              type: "PFR",
-              volume: args.V,
-              conversion: result.X,
-              order,
-              k: args.k,
-              F_A0: args.F_A0,
-              C_A0: args.C_A0,
-              profile: result.profile,
-              checks: { validConversion: result.validConversion, positiveVolume: result.positiveVolume },
-              ok: result.ok,
-              error: result.error,
-            };
-          }
-        } catch (e: any) {
-          toolResponse = { ok: false, error: e.message };
-        }
-
+        const { toolResponse, reactorState } = runToolCall(call);
+        if (reactorState) session.reactorState = reactorState;
         generationResponse = await sendWithRetry(chat, {
-           message: [{
-             functionResponse: {
-               id: call.id,
-               name: call.name,
-               response: toolResponse
-             }
-           }] as any
+          message: [{ functionResponse: { id: call.id, name: call.name, response: toolResponse } }] as any,
         });
         functionCalls = generationResponse.functionCalls;
       }
 
-      const historyResponse = await chat.getHistory();
-      session.history = historyResponse;
-
-      // Extract client facing chat messages
-      const clientHistory = session.history.map((turn: any) => {
-         const textParts = turn.parts.filter((p: any) => p.text);
-         if (textParts.length > 0) {
-           return {
-             id: Math.random().toString(),
-             role: turn.role,
-             content: textParts.map((p: any) => p.text).join("\n")
-           };
-         }
-         return null;
-      }).filter(Boolean);
-
-      res.json({
-        history: clientHistory,
-        reactorState: session.reactorState
-      });
-
+      session.history = await chat.getHistory();
+      res.json({ history: toClientHistory(session.history), reactorState: session.reactorState });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Streaming endpoint: emits the agent's real steps live as Server-Sent Events.
+  app.post("/api/chat/stream", async (req, res) => {
+    const { sessionId, message } = req.body;
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    (res as any).flushHeaders?.();
+    const emit = (e: any) => res.write(`data: ${JSON.stringify(e)}\n\n`);
+
+    try {
+      if (!sessions[sessionId]) sessions[sessionId] = { history: [], reactorState: null };
+      const session = sessions[sessionId];
+
+      emit({ type: "stage", id: "reason", label: "Understanding your request", status: "active" });
+      const { chat, response: first } = await startChatStreaming(session.history, message, emit);
+      emit({ type: "stage", id: "reason", status: "done" });
+      let generationResponse = first;
+
+      let usedTool = false;
+      let functionCalls = generationResponse.functionCalls;
+      while (functionCalls && functionCalls.length > 0) {
+        usedTool = true;
+        const call = functionCalls[0];
+        const t = toolTrace(call);
+        emit({ type: "stage", id: "tool", label: t.label, detail: t.detail, status: "active" });
+
+        const { toolResponse, reactorState } = runToolCall(call);
+        if (reactorState) session.reactorState = reactorState;
+
+        emit({ type: "stage", id: "tool", status: "done" });
+        emit({
+          type: "stage",
+          id: "verify",
+          label: toolResponse?.ok ? "Verified — 0 ≤ X ≤ 1, V > 0" : "Check failed — inputs rejected",
+          status: "done",
+          ok: !!toolResponse?.ok,
+          warn: !toolResponse?.ok,
+        });
+        emit({ type: "stage", id: "explain", label: "Explaining the result", status: "active" });
+
+        generationResponse = await sendWithRetry(chat, {
+          message: [{ functionResponse: { id: call.id, name: call.name, response: toolResponse } }] as any,
+        });
+        functionCalls = generationResponse.functionCalls;
+      }
+      if (usedTool) emit({ type: "stage", id: "explain", status: "done" });
+
+      // Stream the final explanation token-by-token for a live typewriter feel.
+      const finalText = (generationResponse as any).text ?? "";
+      for (const piece of chunkText(finalText)) {
+        emit({ type: "delta", text: piece });
+        await sleep(12);
+      }
+
+      session.history = await chat.getHistory();
+      emit({ type: "result", history: toClientHistory(session.history), reactorState: session.reactorState });
+      res.end();
+    } catch (error: any) {
+      console.error(error);
+      emit({
+        type: "error",
+        message: isTransientOverload(error)
+          ? "The models are busy right now — please try again in a moment."
+          : error.message || "Something went wrong.",
+      });
+      res.end();
     }
   });
 

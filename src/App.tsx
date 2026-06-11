@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Send, ShieldCheck, AlertTriangle, RotateCcw, Activity } from 'lucide-react';
+import { Send, ShieldCheck, AlertTriangle, RotateCcw, Activity, Loader2, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import 'katex/dist/katex.min.css';
 import katex from 'katex';
-import { ChatMessage, ReactorState, ChatResponse } from './types';
+import { ChatMessage, ReactorState } from './types';
 import {
   AreaChart,
   Area,
@@ -360,56 +360,123 @@ function ConversionPlot({ state }: { state: ReactorState }) {
 }
 
 // -------------------------------------------------------------
+// Live agent trace ("thinking")
+// -------------------------------------------------------------
+
+export interface TraceStep {
+  id: string;
+  label?: string;
+  detail?: string;
+  status: 'active' | 'done';
+  ok?: boolean;
+  warn?: boolean;
+}
+
+function StepIcon({ step }: { step: TraceStep }) {
+  if (step.status === 'active') return <Loader2 className="h-4 w-4 animate-spin text-[#34D399]" />;
+  if (step.warn) return <AlertTriangle className="h-4 w-4 text-[#FBBF24]" />;
+  if (step.ok) return <ShieldCheck className="h-4 w-4 text-[#34D399]" />;
+  return <Check className="h-4 w-4 text-[#34D399]" />;
+}
+
+function ThinkingPanel({ trace }: { trace: TraceStep[] }) {
+  return (
+    <div className="flex min-h-[230px] flex-col rounded-xl border border-[#34D399]/15 bg-[radial-gradient(520px_240px_at_50%_0%,rgba(52,211,153,0.08),transparent_70%)] p-5">
+      <div className="mb-5 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.18em] text-[#6EE7B7]">
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Agent working
+      </div>
+      <ol className="space-y-3.5">
+        {trace.map((step) => (
+          <li key={step.id} className="flex animate-rise items-start gap-3">
+            <span className="mt-0.5 flex-none">
+              <StepIcon step={step} />
+            </span>
+            <div className="min-w-0">
+              <div className={cn('text-sm leading-snug', step.warn ? 'text-[#FCD34D]' : 'text-[#E6EFEB]')}>
+                {step.label}
+              </div>
+              {step.detail && (
+                <div className="mt-1 font-mono text-[11px] leading-relaxed text-[#7E938B]">{step.detail}</div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </div>
+  );
+}
+
+// -------------------------------------------------------------
 // Visualization panel
 // -------------------------------------------------------------
 
-function VizPanel({ state, className }: { state: ReactorState | null; className?: string }) {
+function VizPanel({
+  state,
+  thinking,
+  trace,
+  className,
+}: {
+  state: ReactorState | null;
+  thinking: boolean;
+  trace: TraceStep[];
+  className?: string;
+}) {
   return (
     <section className={cn('min-h-0 flex-col overflow-hidden rounded-2xl border border-white/[0.07] bg-[#0B100F]/80 backdrop-blur', className)}>
       <div className="flex flex-none items-center justify-between border-b border-white/[0.06] px-5 py-3.5">
         <h2 className="font-display text-sm font-bold tracking-tight text-[#E6EFEB]">
-          Reactor{state?.type ? <span className="text-[#34D399]"> · {state.type}</span> : ''}
+          {thinking ? 'Agent' : 'Reactor'}
+          {!thinking && state?.type ? <span className="text-[#34D399]"> · {state.type}</span> : null}
         </h2>
-        {state?.type && <VerifiedPill state={state} />}
+        {!thinking && state?.type && <VerifiedPill state={state} />}
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto p-5">
-        <ReactorStage state={state} />
-
-        {state?.type && (
+        <div key={thinking ? 'thinking' : 'result'} className="animate-fade-in">
+        {thinking ? (
+          <ThinkingPanel trace={trace} />
+        ) : (
           <>
-            {state.error && (
-              <div className="mt-4 flex items-start gap-2 rounded-lg border border-[#FBBF24]/25 bg-[#FBBF24]/10 px-3 py-2.5 text-sm text-[#FCD34D]">
-                <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
-                <span>{state.error}</span>
-              </div>
+            <ReactorStage state={state} />
+
+            {state?.type && (
+              <>
+                {state.error && (
+                  <div className="mt-4 flex items-start gap-2 rounded-lg border border-[#FBBF24]/25 bg-[#FBBF24]/10 px-3 py-2.5 text-sm text-[#FCD34D]">
+                    <AlertTriangle className="mt-0.5 h-4 w-4 flex-none" />
+                    <span>{state.error}</span>
+                  </div>
+                )}
+
+                <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                  <Readout label="Volume" value={fmt(state.volume)} unit="m³" accent />
+                  <Readout label="Conversion" value={fmt(state.conversion)} accent />
+                  <Readout label="Residence τ" value={fmt(residenceTime(state))} unit="s" />
+                  <Readout label="Rate const k" value={fmt(state.k)} />
+                  <Readout label="Feed F_A0" value={fmt(state.F_A0)} unit="mol/s" />
+                  <Readout label="Conc C_A0" value={fmt(state.C_A0)} unit="mol/m³" />
+                </div>
+
+                <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.015] p-4">
+                  <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#7E938B]">
+                    Model &amp; assumptions
+                  </div>
+                  <p className="mb-3 text-sm text-[#B7C7C1]">
+                    Isothermal · {state.order === 1 ? 'first-order' : `${fmt(state.order)}-order`} in A · A → B ·
+                    constant density
+                  </p>
+                  <div className="overflow-x-auto text-[15px] text-[#E6EFEB]">
+                    <MathInline tex={designEquation(state)} />
+                  </div>
+                </div>
+
+                <ConversionPlot state={state} />
+              </>
             )}
-
-            <div className="mt-4 grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-              <Readout label="Volume" value={fmt(state.volume)} unit="m³" accent />
-              <Readout label="Conversion" value={fmt(state.conversion)} accent />
-              <Readout label="Residence τ" value={fmt(residenceTime(state))} unit="s" />
-              <Readout label="Rate const k" value={fmt(state.k)} />
-              <Readout label="Feed F_A0" value={fmt(state.F_A0)} unit="mol/s" />
-              <Readout label="Conc C_A0" value={fmt(state.C_A0)} unit="mol/m³" />
-            </div>
-
-            <div className="mt-4 rounded-xl border border-white/5 bg-white/[0.015] p-4">
-              <div className="mb-2 font-mono text-[10px] uppercase tracking-[0.16em] text-[#7E938B]">
-                Model &amp; assumptions
-              </div>
-              <p className="mb-3 text-sm text-[#B7C7C1]">
-                Isothermal · {state.order === 1 ? 'first-order' : `${fmt(state.order)}-order`} in A · A → B ·
-                constant density
-              </p>
-              <div className="overflow-x-auto text-[15px] text-[#E6EFEB]">
-                <MathInline tex={designEquation(state)} />
-              </div>
-            </div>
-
-            <ConversionPlot state={state} />
           </>
         )}
+        </div>
       </div>
     </section>
   );
@@ -427,6 +494,7 @@ const EXAMPLES = [
 function ChatPanel({
   messages,
   isLoading,
+  streamingText,
   input,
   setInput,
   onSubmit,
@@ -435,6 +503,7 @@ function ChatPanel({
 }: {
   messages: ChatMessage[];
   isLoading: boolean;
+  streamingText: string;
   input: string;
   setInput: (v: string) => void;
   onSubmit: (e: React.FormEvent) => void;
@@ -446,7 +515,7 @@ function ChatPanel({
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isLoading]);
+  }, [messages, isLoading, streamingText]);
 
   useEffect(() => {
     if (textareaRef.current) {
@@ -521,12 +590,20 @@ function ChatPanel({
           </div>
         ))}
 
-        {isLoading && (
+        {streamingText && (
           <div className="flex justify-start">
-            <div className="flex h-10 items-center space-x-1 rounded-2xl rounded-bl-md border border-white/[0.06] bg-white/[0.03] px-4 py-3">
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#34D399]/70 [animation-delay:-0.3s]" />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#34D399]/70 [animation-delay:-0.15s]" />
-              <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-[#34D399]/70" />
+            <div className="max-w-[88%] rounded-2xl rounded-bl-md border border-white/[0.06] bg-white/[0.03] px-4 py-3 text-[14px] leading-relaxed text-[#D6E2DD]">
+              <span className="whitespace-pre-wrap">{streamingText}</span>
+              <span className="ml-0.5 inline-block h-3.5 w-[3px] translate-y-0.5 animate-pulse bg-[#34D399] align-middle" />
+            </div>
+          </div>
+        )}
+
+        {isLoading && !streamingText && (
+          <div className="flex justify-start">
+            <div className="flex items-center gap-2 rounded-2xl rounded-bl-md border border-white/[0.06] bg-white/[0.03] px-4 py-3 font-mono text-[11px] tracking-wide text-[#7E938B]">
+              <Loader2 className="h-3.5 w-3.5 animate-spin text-[#34D399]" />
+              thinking…
             </div>
           </div>
         )}
@@ -568,6 +645,9 @@ export default function App() {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [sessionId, setSessionId] = useState(() => Math.random().toString(36).substring(2, 10));
+  // Live agent trace + streaming answer (driven by the SSE endpoint).
+  const [agentTrace, setAgentTrace] = useState<TraceStep[]>([]);
+  const [streamingText, setStreamingText] = useState('');
   // On phones we show one panel at a time via a tab switch (both show side-by-side on lg+).
   const [mobileTab, setMobileTab] = useState<'reactor' | 'chat'>('chat');
 
@@ -575,6 +655,8 @@ export default function App() {
     setMessages([]);
     setReactorState(null);
     setInput('');
+    setAgentTrace([]);
+    setStreamingText('');
     setSessionId(Math.random().toString(36).substring(2, 10));
     setMobileTab('chat');
   };
@@ -587,37 +669,79 @@ export default function App() {
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
     setIsLoading(true);
+    setAgentTrace([]);
+    setStreamingText('');
+    setMobileTab('reactor'); // watch the live trace in the viz layer
+
+    // Apply one server event to local state.
+    const apply = (evt: any) => {
+      if (evt.type === 'stage') {
+        setAgentTrace((prev) => {
+          const i = prev.findIndex((s) => s.id === evt.id);
+          if (i >= 0) {
+            const next = [...prev];
+            next[i] = { ...next[i], ...evt, status: evt.status ?? next[i].status };
+            return next;
+          }
+          return [
+            ...prev,
+            { id: evt.id, label: evt.label, detail: evt.detail, status: evt.status ?? 'active', ok: evt.ok, warn: evt.warn },
+          ];
+        });
+      } else if (evt.type === 'delta') {
+        setStreamingText((prev) => prev + evt.text);
+      } else if (evt.type === 'result') {
+        if (evt.reactorState) setReactorState(evt.reactorState);
+        setMessages(
+          (evt.history || []).map((m: any) => ({
+            id: m.id || Math.random().toString(),
+            role: m.role as 'user' | 'model',
+            content: m.content,
+          }))
+        );
+        setStreamingText('');
+      } else if (evt.type === 'error') {
+        setMessages((prev) => [...prev, { id: Math.random().toString(), role: 'model', content: evt.message }]);
+      }
+    };
 
     try {
-      const response = await fetch('/api/chat', {
+      const resp = await fetch('/api/chat/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sessionId, message: userMsg.content }),
       });
+      if (!resp.ok || !resp.body) throw new Error('stream failed');
 
-      if (!response.ok) throw new Error('API error');
-
-      const data: ChatResponse = await response.json();
-
-      const newMessages = data.history.map((m) => ({
-        id: m.id || Math.random().toString(),
-        role: m.role as 'user' | 'model',
-        content: m.content,
-      }));
-
-      setMessages(newMessages);
-      if (data.reactorState) {
-        setReactorState(data.reactorState);
-        setMobileTab('reactor'); // surface the result on small screens
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const parts = buffer.split('\n\n');
+        buffer = parts.pop() || '';
+        for (const part of parts) {
+          const line = part.trim();
+          if (!line.startsWith('data:')) continue;
+          try {
+            apply(JSON.parse(line.slice(5).trim()));
+          } catch {
+            /* ignore malformed chunk */
+          }
+        }
       }
     } catch (error) {
       console.error(error);
       setMessages((prev) => [
         ...prev,
-        { id: Math.random().toString(), role: 'model', content: 'Sorry, an error occurred while calculating.' },
+        { id: Math.random().toString(), role: 'model', content: 'Sorry, the connection dropped. Please try again.' },
       ]);
     } finally {
       setIsLoading(false);
+      setAgentTrace([]);
+      setStreamingText('');
     }
   };
 
@@ -663,11 +787,17 @@ export default function App() {
 
       {/* Main */}
       <main className="mx-auto grid min-h-0 w-full max-w-[1440px] flex-1 grid-cols-1 gap-4 overflow-hidden p-3 md:p-5 lg:grid-cols-[1.55fr_1fr] lg:gap-5">
-        <VizPanel state={reactorState} className={cn(mobileTab === 'reactor' ? 'flex' : 'hidden', 'lg:flex')} />
+        <VizPanel
+          state={reactorState}
+          thinking={isLoading}
+          trace={agentTrace}
+          className={cn(mobileTab === 'reactor' ? 'flex' : 'hidden', 'lg:flex')}
+        />
         <ChatPanel
           className={cn(mobileTab === 'chat' ? 'flex' : 'hidden', 'lg:flex')}
           messages={messages}
           isLoading={isLoading}
+          streamingText={streamingText}
           input={input}
           setInput={setInput}
           onSubmit={handleSubmit}
