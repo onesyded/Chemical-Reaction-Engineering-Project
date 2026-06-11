@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Send, ShieldCheck, AlertTriangle, RotateCcw, Activity, Loader2, Check } from 'lucide-react';
+import { Send, ShieldCheck, AlertTriangle, RotateCcw, Activity, Loader2, Check, PanelRightClose, PanelRightOpen } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
@@ -499,6 +499,7 @@ function ChatPanel({
   setInput,
   onSubmit,
   onReset,
+  onCollapse,
   className,
 }: {
   messages: ChatMessage[];
@@ -508,6 +509,7 @@ function ChatPanel({
   setInput: (v: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   onReset: () => void;
+  onCollapse: () => void;
   className?: string;
 }) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -537,14 +539,23 @@ function ChatPanel({
         <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-[#7E938B]">
           Conversation
         </h2>
-        <button
-          onClick={onReset}
-          className="flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[#7E938B] transition-colors hover:bg-white/5 hover:text-[#E6EFEB]"
-          title="Start a new session"
-        >
-          <RotateCcw className="h-3 w-3" />
-          New
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onReset}
+            className="flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[10px] uppercase tracking-wide text-[#7E938B] transition-colors hover:bg-white/5 hover:text-[#E6EFEB]"
+            title="Start a new session"
+          >
+            <RotateCcw className="h-3 w-3" />
+            New
+          </button>
+          <button
+            onClick={onCollapse}
+            className="hidden items-center rounded-md p-1.5 text-[#7E938B] transition-colors hover:bg-white/5 hover:text-[#E6EFEB] lg:flex"
+            title="Collapse the conversation (focus the reactor)"
+          >
+            <PanelRightClose className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4">
@@ -653,6 +664,8 @@ export default function App() {
   const [reactorBuilt, setReactorBuilt] = useState(false);
   // On phones we show one panel at a time via a tab switch (both show side-by-side on lg+).
   const [mobileTab, setMobileTab] = useState<'reactor' | 'chat'>('chat');
+  // Desktop: collapse the chat to give the reactor the full width (focus mode).
+  const [chatCollapsed, setChatCollapsed] = useState(false);
 
   const handleReset = () => {
     setMessages([]);
@@ -796,7 +809,12 @@ export default function App() {
       </div>
 
       {/* Main */}
-      <main className="mx-auto grid min-h-0 w-full max-w-[1440px] flex-1 grid-cols-1 gap-4 overflow-hidden p-3 md:p-5 lg:grid-cols-[1.55fr_1fr] lg:gap-5">
+      <main
+        className={cn(
+          'mx-auto grid min-h-0 w-full max-w-[1440px] flex-1 grid-cols-1 gap-4 overflow-hidden p-3 md:p-5 lg:gap-5',
+          chatCollapsed ? 'lg:grid-cols-1' : 'lg:grid-cols-[1.55fr_1fr]'
+        )}
+      >
         <VizPanel
           state={reactorState}
           thinking={isLoading && !reactorBuilt}
@@ -804,7 +822,7 @@ export default function App() {
           className={cn(mobileTab === 'reactor' ? 'flex' : 'hidden', 'lg:flex')}
         />
         <ChatPanel
-          className={cn(mobileTab === 'chat' ? 'flex' : 'hidden', 'lg:flex')}
+          className={cn(mobileTab === 'chat' ? 'flex' : 'hidden', chatCollapsed ? 'lg:hidden' : 'lg:flex')}
           messages={messages}
           isLoading={isLoading}
           streamingText={streamingText}
@@ -812,8 +830,20 @@ export default function App() {
           setInput={setInput}
           onSubmit={handleSubmit}
           onReset={handleReset}
+          onCollapse={() => setChatCollapsed(true)}
         />
       </main>
+
+      {/* Re-open the chat from focus mode (desktop only) */}
+      {chatCollapsed && (
+        <button
+          onClick={() => setChatCollapsed(false)}
+          className="fixed right-0 top-1/2 z-20 hidden -translate-y-1/2 rounded-l-2xl border border-r-0 border-white/[0.07] bg-[#0B100F]/90 py-5 pl-2.5 pr-2 font-mono text-[10px] uppercase tracking-[0.2em] text-[#7E938B] backdrop-blur transition-colors hover:text-[#E6EFEB] lg:block [writing-mode:vertical-rl]"
+          title="Show the conversation"
+        >
+          Conversation
+        </button>
+      )}
     </div>
   );
 }

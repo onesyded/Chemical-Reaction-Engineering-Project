@@ -12,12 +12,17 @@ import {
 
 dotenv.config();
 
-// Model is env-configurable. Default gemini-2.5-flash-lite: the fastest free-tier Flash model —
-// plenty for picking one of four tools and extracting numbers, and it keeps responses snappy.
-// Falls back to gemini-2.5-flash (more capable) on overload. gemini-3.5-flash is the most capable
-// but is frequently 503-overloaded on the free tier, so it's opt-in via GEMINI_MODEL.
-const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash-lite";
-const FALLBACK_MODELS = Array.from(new Set([MODEL, "gemini-2.5-flash"]));
+// Model is env-configurable. Default gemini-2.5-flash: reliable tool-calling (the whole product
+// depends on it actually calling the verified solvers) while staying fast. gemini-2.5-flash-lite
+// is faster but flaky at tool-calling on terse prompts, so it's only a fallback. gemini-3.5-flash
+// is the most capable but frequently 503-overloaded on the free tier, so it's opt-in via GEMINI_MODEL.
+const MODEL = process.env.GEMINI_MODEL || "gemini-2.5-flash";
+const FALLBACK_MODELS = Array.from(new Set([MODEL, "gemini-2.5-flash-lite"]));
+
+// Deliberate beat between the reactor building in the viz and the explanation
+// starting in the chat (tune to taste). Eventually this is the seam where a
+// dedicated "explainer agent" takes over.
+const REACTOR_BEAT_MS = 600;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 function isTransientOverload(e: any): boolean {
@@ -113,7 +118,7 @@ const systemInstruction = `You are an AI copilot for chemical engineering studen
 
 CRITICAL RULES:
 1. NEVER do the reactor arithmetic yourself. ALWAYS call a tool — the tools are the only source of truth.
-2. If the user has not provided every required input, DO NOT guess or assume values. Ask one short, specific clarifying question naming exactly which inputs are missing.
+2. If ALL required inputs are present, call the tool IMMEDIATELY — never ask the user to confirm values they already gave. If any required input is missing, DO NOT guess: ask one short, specific question naming exactly which inputs are missing.
    - Sizing a reactor (size_cstr / size_pfr) needs: F_A0 (mol/s), C_A0 (mol/m³), k, and X_target (0–1).
    - Finding conversion (conversion_in_cstr / conversion_in_pfr) needs: F_A0, C_A0, k, and V (m³).
 3. Reaction order defaults to 1 (first order) unless the user states otherwise.
@@ -350,6 +355,7 @@ async function startServer() {
         });
         // Build the reactor in the viz now — before we explain it in the chat.
         emit({ type: "reactor", reactorState: session.reactorState });
+        await sleep(REACTOR_BEAT_MS); // let the reactor land before the words start
         emit({ type: "stage", id: "explain", label: "Explaining the result", status: "active" });
 
         generationResponse = await sendWithRetry(chat, {
