@@ -648,6 +648,9 @@ export default function App() {
   // Live agent trace + streaming answer (driven by the SSE endpoint).
   const [agentTrace, setAgentTrace] = useState<TraceStep[]>([]);
   const [streamingText, setStreamingText] = useState('');
+  // True once the reactor result has arrived mid-stream, so the viz shows the
+  // reactor while the explanation is still streaming into the chat.
+  const [reactorBuilt, setReactorBuilt] = useState(false);
   // On phones we show one panel at a time via a tab switch (both show side-by-side on lg+).
   const [mobileTab, setMobileTab] = useState<'reactor' | 'chat'>('chat');
 
@@ -657,6 +660,7 @@ export default function App() {
     setInput('');
     setAgentTrace([]);
     setStreamingText('');
+    setReactorBuilt(false);
     setSessionId(Math.random().toString(36).substring(2, 10));
     setMobileTab('chat');
   };
@@ -671,6 +675,7 @@ export default function App() {
     setIsLoading(true);
     setAgentTrace([]);
     setStreamingText('');
+    setReactorBuilt(false);
     setMobileTab('reactor'); // watch the live trace in the viz layer
 
     // Apply one server event to local state.
@@ -690,6 +695,11 @@ export default function App() {
         });
       } else if (evt.type === 'delta') {
         setStreamingText((prev) => prev + evt.text);
+      } else if (evt.type === 'reactor') {
+        if (evt.reactorState) {
+          setReactorState(evt.reactorState);
+          setReactorBuilt(true); // morph viz to the reactor before the words arrive
+        }
       } else if (evt.type === 'result') {
         if (evt.reactorState) setReactorState(evt.reactorState);
         setMessages(
@@ -789,7 +799,7 @@ export default function App() {
       <main className="mx-auto grid min-h-0 w-full max-w-[1440px] flex-1 grid-cols-1 gap-4 overflow-hidden p-3 md:p-5 lg:grid-cols-[1.55fr_1fr] lg:gap-5">
         <VizPanel
           state={reactorState}
-          thinking={isLoading}
+          thinking={isLoading && !reactorBuilt}
           trace={agentTrace}
           className={cn(mobileTab === 'reactor' ? 'flex' : 'hidden', 'lg:flex')}
         />

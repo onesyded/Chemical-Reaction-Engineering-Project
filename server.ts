@@ -348,6 +348,8 @@ async function startServer() {
           ok: !!toolResponse?.ok,
           warn: !toolResponse?.ok,
         });
+        // Build the reactor in the viz now — before we explain it in the chat.
+        emit({ type: "reactor", reactorState: session.reactorState });
         emit({ type: "stage", id: "explain", label: "Explaining the result", status: "active" });
 
         generationResponse = await sendWithRetry(chat, {
